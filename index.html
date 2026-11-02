@@ -1,667 +1,889 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Czasu Realizacji</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Czasu Realizacji — Analiza Trendów</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #1e2a4a 0%, #2d3561 50%, #3a3f7d 100%);
+        min-height: 100vh;
+        padding: 20px;
+        color: #222;
+    }
 
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            padding: 30px;
-        }
+    .container {
+        max-width: 1500px;
+        margin: 0 auto;
+        background: #ffffff;
+        border-radius: 14px;
+        box-shadow: 0 25px 70px rgba(0, 0, 0, 0.4);
+        padding: 32px;
+    }
 
-        .header {
-            text-align: center;
-            margin-bottom: 40px;
-            border-bottom: 3px solid #667eea;
-            padding-bottom: 20px;
-        }
+    .header {
+        text-align: center;
+        margin-bottom: 32px;
+        border-bottom: 3px solid #3a3f7d;
+        padding-bottom: 20px;
+    }
 
-        .header h1 {
-            color: #333;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
+    .header h1 {
+        color: #1e2a4a;
+        font-size: 2.3em;
+        margin-bottom: 8px;
+    }
 
-        .header p {
-            color: #666;
-            font-size: 1.1em;
-        }
+    .header p {
+        color: #666;
+        font-size: 1.05em;
+    }
 
-        .controls-section {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-        }
+    /* ===== Stat cards ===== */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        margin-bottom: 24px;
+    }
 
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
+    .stat-card {
+        background: linear-gradient(135deg, #3a3f7d 0%, #1e2a4a 100%);
+        color: white;
+        padding: 18px;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(58, 63, 125, 0.35);
+    }
 
-        .control-group label {
-            font-weight: 600;
-            color: #333;
-            font-size: 0.95em;
-        }
+    .stat-label { font-size: 0.85em; opacity: 0.85; margin-bottom: 6px; }
+    .stat-value { font-size: 1.7em; font-weight: bold; }
 
-        .size-filter {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
+    /* ===== Analysis cards ===== */
+    .analysis-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 16px;
+        margin-bottom: 28px;
+    }
 
-        .size-checkbox {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-            padding: 8px 12px;
-            border: 2px solid #ddd;
-            border-radius: 6px;
-            transition: all 0.3s;
-        }
+    .analysis-card {
+        background: #f6f7fb;
+        border: 1px solid #e1e4ef;
+        border-left: 5px solid #3a3f7d;
+        border-radius: 10px;
+        padding: 18px 20px;
+    }
 
-        .size-checkbox:hover {
-            border-color: #667eea;
-        }
+    .analysis-card h3 {
+        font-size: 1.05em;
+        color: #1e2a4a;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
 
-        .size-checkbox input {
-            cursor: pointer;
-            width: 18px;
-            height: 18px;
-            margin: 0;
-        }
+    .analysis-card .big-value {
+        font-size: 1.6em;
+        font-weight: 700;
+        margin: 4px 0;
+    }
 
-        .size-checkbox.S { border-color: #3498db; }
-        .size-checkbox.M { border-color: #f39c12; }
-        .size-checkbox.L { border-color: #e74c3c; }
+    .analysis-card .sub-text {
+        font-size: 0.88em;
+        color: #555;
+        line-height: 1.5;
+    }
 
-        .size-checkbox.S input:checked { accent-color: #3498db; }
-        .size-checkbox.M input:checked { accent-color: #f39c12; }
-        .size-checkbox.L input:checked { accent-color: #e74c3c; }
+    .trend-up { color: #c0392b; }
+    .trend-down { color: #1e8449; }
+    .trend-flat { color: #7f8c8d; }
 
-        .button-group {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
+    .badge {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 0.78em;
+        font-weight: 600;
+        margin-left: 6px;
+    }
 
-        button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 0.95em;
-        }
+    .badge-weak { background: #fde9e9; color: #c0392b; }
+    .badge-moderate { background: #fff4da; color: #a9720f; }
+    .badge-strong { background: #e4f6e9; color: #1e8449; }
 
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
+    .size-stats-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9em;
+        margin-top: 8px;
+    }
 
-        .btn-primary:hover {
-            background: #5568d3;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
+    .size-stats-table th, .size-stats-table td {
+        text-align: center;
+        padding: 6px 8px;
+        border-bottom: 1px solid #e1e4ef;
+    }
 
-        .btn-secondary {
-            background: #e8e8e8;
-            color: #333;
-        }
+    .size-stats-table th { color: #1e2a4a; font-weight: 600; }
 
-        .btn-secondary:hover {
-            background: #d0d0d0;
-            transform: translateY(-2px);
-        }
+    .size-dot {
+        display: inline-block;
+        width: 10px; height: 10px;
+        border-radius: 50%;
+        margin-right: 5px;
+    }
 
-        .btn-danger {
-            background: #e74c3c;
-            color: white;
-        }
+    /* ===== Controls ===== */
+    .controls-section {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+        margin-bottom: 24px;
+        background: #f6f7fb;
+        padding: 18px;
+        border-radius: 10px;
+    }
 
-        .btn-danger:hover {
-            background: #c0392b;
-            transform: translateY(-2px);
-        }
+    .control-group { display: flex; flex-direction: column; gap: 10px; }
+    .control-group label.title { font-weight: 600; color: #1e2a4a; font-size: 0.92em; }
 
-        .btn-success {
-            background: #27ae60;
-            color: white;
-        }
+    .size-filter { display: flex; gap: 10px; flex-wrap: wrap; }
 
-        .btn-success:hover {
-            background: #229954;
-            transform: translateY(-2px);
-        }
+    .size-checkbox {
+        display: flex; align-items: center; gap: 7px; cursor: pointer;
+        padding: 7px 12px; border: 2px solid #ddd; border-radius: 6px; transition: all 0.2s;
+        font-size: 0.92em;
+    }
+    .size-checkbox:hover { border-color: #3a3f7d; }
+    .size-checkbox input { cursor: pointer; width: 16px; height: 16px; margin: 0; }
+    .size-checkbox.S { border-color: #2980b9; }
+    .size-checkbox.M { border-color: #e67e22; }
+    .size-checkbox.L { border-color: #c0392b; }
+    .size-checkbox.S input:checked { accent-color: #2980b9; }
+    .size-checkbox.M input:checked { accent-color: #e67e22; }
+    .size-checkbox.L input:checked { accent-color: #c0392b; }
 
-        .chart-container {
-            position: relative;
-            margin-bottom: 40px;
-            background: #fafafa;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
+    .toggle-row { display: flex; align-items: center; gap: 8px; font-size: 0.92em; cursor: pointer; }
+    .toggle-row input { width: 16px; height: 16px; cursor: pointer; }
 
-        .chart-container canvas {
-            max-height: 500px;
-        }
+    .button-group { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
 
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
-        }
+    button {
+        padding: 9px 18px; border: none; border-radius: 6px; font-weight: 600;
+        cursor: pointer; transition: all 0.2s; font-size: 0.9em;
+    }
+    .btn-primary { background: #3a3f7d; color: white; }
+    .btn-primary:hover { background: #2d3263; transform: translateY(-1px); }
+    .btn-secondary { background: #e4e6ef; color: #333; }
+    .btn-secondary:hover { background: #d2d5e4; }
+    .btn-danger { background: #c0392b; color: white; }
+    .btn-danger:hover { background: #a42f23; }
+    .btn-success { background: #1e8449; color: white; }
+    .btn-success:hover { background: #166c3a; }
+    .btn-small { padding: 5px 10px; font-size: 0.82em; }
 
-        .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-        }
+    /* ===== Chart ===== */
+    .chart-container {
+        position: relative; margin-bottom: 28px; background: #fafbfd;
+        padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        border: 1px solid #ececf4;
+    }
+    .chart-container canvas { max-height: 480px; }
 
-        .stat-label {
-            font-size: 0.9em;
-            opacity: 0.9;
-            margin-bottom: 8px;
-        }
+    .chart-title { font-size: 1.1em; font-weight: 600; color: #1e2a4a; margin-bottom: 12px; }
 
-        .stat-value {
-            font-size: 1.8em;
-            font-weight: bold;
-        }
+    .percentile-legend {
+        margin-top: 14px; padding: 14px; background: white; border-radius: 8px;
+        display: flex; gap: 24px; flex-wrap: wrap; border: 1px solid #ececf4;
+    }
+    .percentile-line { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 0.92em; }
+    .dash { display: inline-block; width: 22px; height: 0; border-top: 3px dashed; }
+    .p50-dash { border-color: #1e8449; }
+    .p85-dash { border-color: #e67e22; }
+    .p95-dash { border-color: #c0392b; }
+    .trend-dash { border-color: #1e2a4a; border-top-style: solid; }
 
-        .data-input-section {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            margin-top: 30px;
-            border: 2px dashed #667eea;
-        }
+    .tooltip-hint { font-size: 0.82em; color: #888; margin-top: 10px; font-style: italic; }
 
-        .data-input-section h3 {
-            color: #333;
-            margin-bottom: 15px;
-            font-size: 1.2em;
-        }
+    /* ===== Outliers ===== */
+    .outliers-info {
+        background: #fff6e0; border-left: 4px solid #e67e22; padding: 14px 16px;
+        border-radius: 6px; margin-bottom: 24px;
+    }
+    .outlier-item {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 7px 0; border-bottom: 1px solid #ffe8bf; font-size: 0.9em;
+    }
+    .outlier-item:last-child { border-bottom: none; }
 
-        .input-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 15px;
-            align-items: end;
-        }
+    /* ===== Data input ===== */
+    .data-input-section {
+        background: #f6f7fb; padding: 20px; border-radius: 10px; margin-top: 10px;
+        border: 2px dashed #3a3f7d;
+    }
+    .data-input-section h3 { color: #1e2a4a; margin-bottom: 14px; font-size: 1.1em; }
+    .input-row {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 14px; align-items: end;
+    }
+    .input-group { display: flex; flex-direction: column; gap: 7px; }
+    .input-group label { font-weight: 600; color: #333; font-size: 0.88em; }
+    .input-group input, .input-group select {
+        padding: 9px 11px; border: 2px solid #ddd; border-radius: 6px; font-size: 0.92em;
+    }
+    .input-group input:focus, .input-group select:focus { outline: none; border-color: #3a3f7d; }
 
-        .input-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .input-group label {
-            font-weight: 600;
-            color: #333;
-            font-size: 0.9em;
-        }
-
-        .input-group input,
-        .input-group select {
-            padding: 10px 12px;
-            border: 2px solid #ddd;
-            border-radius: 6px;
-            font-size: 0.95em;
-        }
-
-        .input-group input:focus,
-        .input-group select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .outliers-info {
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 15px;
-            border-radius: 4px;
-            margin-top: 15px;
-            color: #333;
-        }
-
-        .outlier-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid #ffe69c;
-        }
-
-        .outlier-item:last-child {
-            border-bottom: none;
-        }
-
-        .btn-small {
-            padding: 5px 10px;
-            font-size: 0.85em;
-        }
-
-        .percentile-legend {
-            margin-top: 15px;
-            padding: 15px;
-            background: white;
-            border-radius: 6px;
-        }
-
-        .percentile-line {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin: 8px 0;
-            font-weight: 500;
-        }
-
-        .p50-line {
-            border-left: 3px solid #27ae60;
-            padding-left: 10px;
-        }
-
-        .p85-line {
-            border-left: 3px solid #f39c12;
-            padding-left: 10px;
-        }
-
-        .p95-line {
-            border-left: 3px solid #e74c3c;
-            padding-left: 10px;
-        }
-
-        .tooltip-hint {
-            font-size: 0.85em;
-            color: #666;
-            margin-top: 5px;
-            font-style: italic;
-        }
-
-        @media (max-width: 768px) {
-            .container {
-                padding: 15px;
-            }
-
-            .header h1 {
-                font-size: 1.8em;
-            }
-
-            .controls-section {
-                grid-template-columns: 1fr;
-            }
-
-            .chart-container canvas {
-                max-height: 300px;
-            }
-        }
-    </style>
+    @media (max-width: 768px) {
+        .container { padding: 16px; }
+        .header h1 { font-size: 1.6em; }
+        .chart-container canvas { max-height: 320px; }
+    }
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>📊 Dashboard Czasu Realizacji</h1>
-            <p>Analiza trendów czasu realizacji wg rozmiaru elementów</p>
+<div class="container">
+    <div class="header">
+        <h1>📊 Dashboard Czasu Realizacji — Analiza Trendów</h1>
+        <p>Scatterplot w czasie, prognozy percentylowe oraz analiza zależności czasu realizacji od rozmiaru zadania</p>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Liczba danych</div><div class="stat-value" id="dataCount">0</div></div>
+        <div class="stat-card"><div class="stat-label">Średni czas (dni)</div><div class="stat-value" id="avgTime">0</div></div>
+        <div class="stat-card"><div class="stat-label">Min czas (dni)</div><div class="stat-value" id="minTime">0</div></div>
+        <div class="stat-card"><div class="stat-label">Max czas (dni)</div><div class="stat-value" id="maxTime">0</div></div>
+    </div>
+
+    <!-- ===== ANALYSIS CARDS ===== -->
+    <div class="analysis-grid">
+        <div class="analysis-card">
+            <h3>📈 Trend w czasie</h3>
+            <div class="big-value" id="trendDirection">—</div>
+            <div class="sub-text" id="trendDetail">Brak wystarczających danych.</div>
+        </div>
+        <div class="analysis-card">
+            <h3>🔗 Zależność: rozmiar → czas realizacji</h3>
+            <div class="big-value" id="correlationValue">—</div>
+            <div class="sub-text" id="correlationDetail">Brak wystarczających danych.</div>
+        </div>
+        <div class="analysis-card">
+            <h3>📐 Statystyki wg rozmiaru</h3>
+            <table class="size-stats-table" id="sizeStatsTable">
+                <thead>
+                    <tr><th>Rozmiar</th><th>N</th><th>Min</th><th>Mediana</th><th>Śr.</th><th>Max</th></tr>
+                </thead>
+                <tbody id="sizeStatsBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="controls-section">
+        <div class="control-group">
+            <label class="title">Filtruj po rozmiarze:</label>
+            <div class="size-filter">
+                <label class="size-checkbox S"><input type="checkbox" value="S" class="size-filter-checkbox" checked> Rozmiar S</label>
+                <label class="size-checkbox M"><input type="checkbox" value="M" class="size-filter-checkbox" checked> Rozmiar M</label>
+                <label class="size-checkbox L"><input type="checkbox" value="L" class="size-filter-checkbox" checked> Rozmiar L</label>
+            </div>
+            <label class="toggle-row"><input type="checkbox" id="toggleTrendLine" checked> Pokaż linię trendu (regresja liniowa)</label>
+            <label class="toggle-row"><input type="checkbox" id="togglePerSizeTrend"> Pokaż osobne trendy dla S / M / L</label>
         </div>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">Liczba danych</div>
-                <div class="stat-value" id="dataCount">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Średni czas (dni)</div>
-                <div class="stat-value" id="avgTime">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Min czas (dni)</div>
-                <div class="stat-value" id="minTime">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Max czas (dni)</div>
-                <div class="stat-value" id="maxTime">0</div>
-            </div>
-        </div>
-
-        <div class="controls-section">
-            <div class="control-group">
-                <label>Filtruj po rozmiarze:</label>
-                <div class="size-filter">
-                    <label class="size-checkbox S">
-                        <input type="checkbox" value="S" class="size-filter-checkbox" checked> Rozmiar S
-                    </label>
-                    <label class="size-checkbox M">
-                        <input type="checkbox" value="M" class="size-filter-checkbox" checked> Rozmiar M
-                    </label>
-                    <label class="size-checkbox L">
-                        <input type="checkbox" value="L" class="size-filter-checkbox" checked> Rozmiar L
-                    </label>
-                </div>
-            </div>
-
+        <div class="control-group">
+            <label class="title">Akcje:</label>
             <div class="button-group">
                 <button class="btn-secondary" onclick="resetFilters()">↺ Reset filtry</button>
                 <button class="btn-danger" onclick="removeAllOutliers()">Usuń wszystkie outliers</button>
                 <button class="btn-success" onclick="restoreAllOutliers()">Przywróć outliers</button>
             </div>
         </div>
-
-        <div class="chart-container">
-            <canvas id="scatterChart"></canvas>
-            <div class="percentile-legend">
-                <div class="p50-line">
-                    P50 (Mediana): <span id="p50Value">0</span> dni
-                </div>
-                <div class="p85-line">
-                    P85 (Prognoza): <span id="p85Value">0</span> dni
-                </div>
-                <div class="p95-line">
-                    P95 (Prognoza): <span id="p95Value">0</span> dni
-                </div>
-                <div class="tooltip-hint">💡 Outliers: Kliknij na punkt, aby go usunąć. Pojawią się poniżej.</div>
-            </div>
-        </div>
-
-        <div id="outliersContainer"></div>
-
-        <div class="data-input-section">
-            <h3>➕ Dodaj nowy punkt danych</h3>
-            <div class="input-row">
-                <div class="input-group">
-                    <label for="newSize">Rozmiar:</label>
-                    <select id="newSize">
-                        <option value="S">Rozmiar S</option>
-                        <option value="M">Rozmiar M</option>
-                        <option value="L">Rozmiar L</option>
-                    </select>
-                </div>
-                <div class="input-group">
-                    <label for="newLeadTime">Czas realizacji (dni):</label>
-                    <input type="number" id="newLeadTime" min="0" max="10000" placeholder="np. 50">
-                </div>
-                <div class="input-group">
-                    <label for="newDate">Data ukończenia:</label>
-                    <input type="date" id="newDate">
-                </div>
-                <button class="btn-primary" onclick="addNewDataPoint()">Dodaj punkt</button>
-            </div>
-        </div>
     </div>
 
-    <script>
-        let originalData = [];
-        let hiddenOutliers = [];
-        let chart = null;
-        let allPoints = [];
-        let percentilePlugin = null;
+    <div class="chart-container">
+        <div class="chart-title">Czas realizacji w czasie (wg daty ukończenia)</div>
+        <canvas id="scatterChart"></canvas>
+        <div class="percentile-legend">
+            <div class="percentile-line"><span class="dash p50-dash"></span>P50 (Mediana): <b id="p50Value">0</b> dni</div>
+            <div class="percentile-line"><span class="dash p85-dash"></span>P85 (Prognoza): <b id="p85Value">0</b> dni</div>
+            <div class="percentile-line"><span class="dash p95-dash"></span>P95 (Prognoza): <b id="p95Value">0</b> dni</div>
+            <div class="percentile-line"><span class="dash trend-dash"></span>Trend (regresja liniowa)</div>
+        </div>
+        <div class="tooltip-hint">💡 Oś X pokazuje rzeczywiste daty ukończenia (skala czasowa) — ułatwia ocenę, czy czas realizacji rośnie, czy maleje. Kliknij punkt, aby oznaczyć go jako outlier.</div>
+    </div>
 
-        const DATA = [
-            {"date": "15 Lipca 2024", "size": "S", "leadTime": 49.0},
-            {"date": "22 Sierpnia 2024", "size": "S", "leadTime": 48.0},
-            {"date": "10 Września 2024", "size": "S", "leadTime": 87.0},
-            {"date": "25 Września 2024", "size": "M", "leadTime": 57.0},
-            {"date": "5 Października 2024", "size": "M", "leadTime": 148.0},
-            {"date": "14 Października 2024", "size": "S", "leadTime": 53.0},
-            {"date": "28 Października 2024", "size": "S", "leadTime": 45.0},
-            {"date": "18 Listopada 2024", "size": "M", "leadTime": 145.0},
-            {"date": "4 Grudnia 2024", "size": "L", "leadTime": 105.0},
-            {"date": "8 Stycznia 2025", "size": "S", "leadTime": 5.0},
-            {"date": "20 Stycznia 2025", "size": "L", "leadTime": 163.0},
-            {"date": "14 Lutego 2025", "size": "S", "leadTime": 43.0},
-            {"date": "26 Lutego 2025", "size": "M", "leadTime": 415.0},
-            {"date": "15 Marca 2025", "size": "L", "leadTime": 123.0},
-            {"date": "10 Kwietnia 2025", "size": "M", "leadTime": 103.0},
-            {"date": "5 Maja 2025", "size": "L", "leadTime": 104.0},
-            {"date": "12 Czerwca 2025", "size": "L", "leadTime": 302.0},
-            {"date": "25 Czerwca 2025", "size": "L", "leadTime": 158.0},
-            {"date": "2 Lipca 2025", "size": "L", "leadTime": 98.0},
-            {"date": "11 Lipca 2025", "size": "S", "leadTime": 52.0},
-            {"date": "18 Lipca 2025", "size": "M", "leadTime": 95.0},
-            {"date": "29 Lipca 2025", "size": "S", "leadTime": 70.0},
-            {"date": "3 Sierpnia 2025", "size": "M", "leadTime": 95.0},
-            {"date": "14 Sierpnia 2025", "size": "M", "leadTime": 101.0},
-            {"date": "21 Sierpnia 2025", "size": "M", "leadTime": 57.0},
-            {"date": "29 Sierpnia 2025", "size": "M", "leadTime": 57.0},
-            {"date": "8 Września 2025", "size": "S", "leadTime": 53.0},
-            {"date": "22 Września 2025", "size": "L", "leadTime": 137.0},
-            {"date": "4 Października 2025", "size": "S", "leadTime": 73.0},
-            {"date": "12 Października 2025", "size": "M", "leadTime": 60.0},
-            {"date": "19 Października 2025", "size": "S", "leadTime": 126.0},
-            {"date": "27 Października 2025", "size": "M", "leadTime": 57.0},
-            {"date": "5 Listopada 2025", "size": "L", "leadTime": 124.0},
-            {"date": "15 Listopada 2025", "size": "M", "leadTime": 75.0},
-            {"date": "25 Listopada 2025", "size": "M", "leadTime": 89.0},
-            {"date": "10 Grudnia 2025", "size": "S", "leadTime": 44.0}
-        ];
+    <div id="outliersContainer"></div>
 
-        const sizeColors = {'S': '#3498db', 'M': '#f39c12', 'L': '#e74c3c'};
+    <div class="data-input-section">
+        <h3>➕ Dodaj nowy punkt danych</h3>
+        <div class="input-row">
+            <div class="input-group">
+                <label for="newSize">Rozmiar:</label>
+                <select id="newSize">
+                    <option value="S">Rozmiar S</option>
+                    <option value="M">Rozmiar M</option>
+                    <option value="L">Rozmiar L</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label for="newLeadTime">Czas realizacji (dni):</label>
+                <input type="number" id="newLeadTime" min="0" max="10000" placeholder="np. 50">
+            </div>
+            <div class="input-group">
+                <label for="newDate">Data ukończenia:</label>
+                <input type="date" id="newDate">
+            </div>
+            <button class="btn-primary" onclick="addNewDataPoint()">Dodaj punkt</button>
+        </div>
+    </div>
+</div>
 
-        function initializeData() {
-            originalData = JSON.parse(JSON.stringify(DATA));
-            allPoints = DATA.map((p, idx) => ({...p, id: idx, hidden: false}));
-            updateChart();
-            updateStats();
-        }
+<script>
+let chart = null;
+let allPoints = [];
 
-        function getSelectedSizes() {
-            return Array.from(document.querySelectorAll('.size-filter-checkbox:checked')).map(cb => cb.value);
-        }
+// Oryginalne dane z pliku "Lead Times - 2024-25.xlsx"
+const RAW_DATA = [
+    {"date": "15 Lipca 2024", "size": "S", "leadTime": 49.0},
+    {"date": "22 Sierpnia 2024", "size": "S", "leadTime": 48.0},
+    {"date": "10 Września 2024", "size": "S", "leadTime": 87.0},
+    {"date": "25 Września 2024", "size": "M", "leadTime": 57.0},
+    {"date": "5 Października 2024", "size": "M", "leadTime": 148.0},
+    {"date": "14 Października 2024", "size": "S", "leadTime": 53.0},
+    {"date": "28 Października 2024", "size": "S", "leadTime": 45.0},
+    {"date": "18 Listopada 2024", "size": "M", "leadTime": 145.0},
+    {"date": "4 Grudnia 2024", "size": "L", "leadTime": 105.0},
+    {"date": "8 Stycznia 2025", "size": "S", "leadTime": 5.0},
+    {"date": "20 Stycznia 2025", "size": "L", "leadTime": 163.0},
+    {"date": "14 Lutego 2025", "size": "S", "leadTime": 43.0},
+    {"date": "26 Lutego 2025", "size": "M", "leadTime": 415.0},
+    {"date": "15 Marca 2025", "size": "L", "leadTime": 123.0},
+    {"date": "10 Kwietnia 2025", "size": "M", "leadTime": 103.0},
+    {"date": "5 Maja 2025", "size": "L", "leadTime": 104.0},
+    {"date": "12 Czerwca 2025", "size": "L", "leadTime": 302.0},
+    {"date": "25 Czerwca 2025", "size": "L", "leadTime": 158.0},
+    {"date": "2 Lipca 2025", "size": "L", "leadTime": 98.0},
+    {"date": "11 Lipca 2025", "size": "S", "leadTime": 52.0},
+    {"date": "18 Lipca 2025", "size": "M", "leadTime": 95.0},
+    {"date": "29 Lipca 2025", "size": "S", "leadTime": 70.0},
+    {"date": "3 Sierpnia 2025", "size": "M", "leadTime": 95.0},
+    {"date": "14 Sierpnia 2025", "size": "M", "leadTime": 101.0},
+    {"date": "21 Sierpnia 2025", "size": "M", "leadTime": 57.0},
+    {"date": "29 Sierpnia 2025", "size": "M", "leadTime": 57.0},
+    {"date": "8 Września 2025", "size": "S", "leadTime": 53.0},
+    {"date": "22 Września 2025", "size": "L", "leadTime": 137.0},
+    {"date": "4 Października 2025", "size": "S", "leadTime": 73.0},
+    {"date": "12 Października 2025", "size": "M", "leadTime": 60.0},
+    {"date": "19 Października 2025", "size": "S", "leadTime": 126.0},
+    {"date": "27 Października 2025", "size": "M", "leadTime": 57.0},
+    {"date": "5 Listopada 2025", "size": "L", "leadTime": 124.0},
+    {"date": "15 Listopada 2025", "size": "M", "leadTime": 75.0},
+    {"date": "25 Listopada 2025", "size": "M", "leadTime": 89.0},
+    {"date": "10 Grudnia 2025", "size": "S", "leadTime": 44.0}
+];
 
-        function getFilteredData() {
-            const selectedSizes = getSelectedSizes();
-            return allPoints.filter(p => !p.hidden && selectedSizes.includes(p.size));
-        }
+const sizeColors = { 'S': '#2980b9', 'M': '#e67e22', 'L': '#c0392b' };
+const sizeOrdinal = { 'S': 1, 'M': 2, 'L': 3 };
 
-        function calculatePercentile(values, percentile) {
-            if (values.length === 0) return 0;
-            const sorted = values.slice().sort((a, b) => a - b);
-            const index = (percentile / 100) * (sorted.length - 1);
-            const lower = Math.floor(index);
-            const upper = Math.ceil(index);
-            const weight = index % 1;
-            if (lower === upper) return sorted[lower];
-            return sorted[lower] * (1 - weight) + sorted[upper] * weight;
-        }
+const POLISH_MONTHS = {
+    'stycznia': 0, 'lutego': 1, 'marca': 2, 'kwietnia': 3, 'maja': 4, 'czerwca': 5,
+    'lipca': 6, 'sierpnia': 7, 'września': 8, 'października': 9, 'listopada': 10, 'grudnia': 11
+};
 
-        function updateChart() {
-            const filteredData = getFilteredData();
-            const datasets = [];
-            let pointIndex = 0;
-            ['S', 'M', 'L'].forEach(size => {
-                const sizeData = filteredData.filter(p => p.size === size);
-                datasets.push({
-                    label: `Rozmiar ${size}`,
-                    data: sizeData.map((p, idx) => ({x: pointIndex++, y: p.leadTime, id: p.id, date: p.date})),
-                    backgroundColor: sizeColors[size],
-                    borderColor: sizeColors[size],
-                    borderWidth: 2,
-                    pointRadius: 6,
-                    pointHoverRadius: 8,
-                    showLine: false
-                });
+function parsePolishDate(str) {
+    const parts = str.trim().split(/\s+/);
+    const day = parseInt(parts[0], 10);
+    const month = POLISH_MONTHS[parts[1].toLowerCase()];
+    const year = parseInt(parts[2], 10);
+    return new Date(year, month, day);
+}
+
+const MONTH_SHORT = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze', 'Lip', 'Sie', 'Wrz', 'Paź', 'Lis', 'Gru'];
+function formatShortDate(ts) {
+    const d = new Date(ts);
+    return `${d.getDate()} ${MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function initializeData() {
+    allPoints = RAW_DATA.map((p, idx) => {
+        const dateObj = parsePolishDate(p.date);
+        return {
+            id: idx,
+            dateLabel: p.date,
+            timestamp: dateObj.getTime(),
+            size: p.size,
+            leadTime: p.leadTime,
+            hidden: false
+        };
+    });
+    renderAll();
+}
+
+function getSelectedSizes() {
+    return Array.from(document.querySelectorAll('.size-filter-checkbox:checked')).map(cb => cb.value);
+}
+
+function getFilteredData() {
+    const selectedSizes = getSelectedSizes();
+    return allPoints.filter(p => !p.hidden && selectedSizes.includes(p.size))
+                     .sort((a, b) => a.timestamp - b.timestamp);
+}
+
+function calculatePercentile(values, percentile) {
+    if (values.length === 0) return 0;
+    const sorted = values.slice().sort((a, b) => a - b);
+    const index = (percentile / 100) * (sorted.length - 1);
+    const lower = Math.floor(index);
+    const upper = Math.ceil(index);
+    const weight = index % 1;
+    if (lower === upper) return sorted[lower];
+    return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+}
+
+function median(values) {
+    return calculatePercentile(values, 50);
+}
+
+// Regresja liniowa metodą najmniejszych kwadratów. Punkty: {x, y}
+function linearRegression(points) {
+    const n = points.length;
+    if (n < 2) return null;
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+    points.forEach(p => { sumX += p.x; sumY += p.y; sumXY += p.x * p.y; sumXX += p.x * p.x; });
+    const denom = (n * sumXX - sumX * sumX);
+    if (denom === 0) return null;
+    const slope = (n * sumXY - sumX * sumY) / denom;
+    const intercept = (sumY - slope * sumX) / n;
+    const meanY = sumY / n;
+    let ssTot = 0, ssRes = 0;
+    points.forEach(p => {
+        const pred = slope * p.x + intercept;
+        ssRes += (p.y - pred) ** 2;
+        ssTot += (p.y - meanY) ** 2;
+    });
+    const r2 = ssTot === 0 ? 0 : 1 - ssRes / ssTot;
+    return { slope, intercept, r2 };
+}
+
+function pearsonCorrelation(xs, ys) {
+    const n = xs.length;
+    if (n < 2) return 0;
+    const sumX = xs.reduce((a, b) => a + b, 0);
+    const sumY = ys.reduce((a, b) => a + b, 0);
+    const sumXY = xs.reduce((a, b, i) => a + b * ys[i], 0);
+    const sumX2 = xs.reduce((a, b) => a + b * b, 0);
+    const sumY2 = ys.reduce((a, b) => a + b * b, 0);
+    const num = n * sumXY - sumX * sumY;
+    const den = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+    return den === 0 ? 0 : num / den;
+}
+
+function correlationStrength(r) {
+    const a = Math.abs(r);
+    if (a < 0.1) return { label: 'brak zależności', css: 'badge-weak' };
+    if (a < 0.3) return { label: 'słaba zależność', css: 'badge-weak' };
+    if (a < 0.5) return { label: 'umiarkowana zależność', css: 'badge-moderate' };
+    if (a < 0.7) return { label: 'silna zależność', css: 'badge-strong' };
+    return { label: 'bardzo silna zależność', css: 'badge-strong' };
+}
+
+function renderAll() {
+    const filteredData = getFilteredData();
+    updateChart(filteredData);
+    updateStats(filteredData);
+    updateTrendAnalysis(filteredData);
+    updateCorrelationAnalysis(filteredData);
+    updateSizeStatsTable(filteredData);
+    updateOutliersDisplay();
+}
+
+function buildTrendDatasets(filteredData, baseTimestamp) {
+    const datasets = [];
+    const showOverall = document.getElementById('toggleTrendLine').checked;
+    const showPerSize = document.getElementById('togglePerSizeTrend').checked;
+
+    if (filteredData.length < 2) return datasets;
+
+    const minTs = Math.min(...filteredData.map(p => p.timestamp));
+    const maxTs = Math.max(...filteredData.map(p => p.timestamp));
+
+    if (showOverall) {
+        const regPoints = filteredData.map(p => ({ x: (p.timestamp - baseTimestamp) / 86400000, y: p.leadTime }));
+        const reg = linearRegression(regPoints);
+        if (reg) {
+            const x1 = (minTs - baseTimestamp) / 86400000;
+            const x2 = (maxTs - baseTimestamp) / 86400000;
+            datasets.push({
+                type: 'line',
+                label: 'Trend ogólny',
+                data: [
+                    { x: minTs, y: reg.slope * x1 + reg.intercept },
+                    { x: maxTs, y: reg.slope * x2 + reg.intercept }
+                ],
+                borderColor: '#1e2a4a',
+                borderWidth: 3,
+                borderDash: [],
+                pointRadius: 0,
+                pointHoverRadius: 0,
+                fill: false,
+                tension: 0,
+                order: 0
             });
+        }
+    }
 
-            const allLeadTimes = filteredData.map(p => p.leadTime);
-            const p50 = calculatePercentile(allLeadTimes, 50);
-            const p85 = calculatePercentile(allLeadTimes, 85);
-            const p95 = calculatePercentile(allLeadTimes, 95);
+    if (showPerSize) {
+        ['S', 'M', 'L'].forEach(size => {
+            const sizeData = filteredData.filter(p => p.size === size);
+            if (sizeData.length < 2) return;
+            const regPoints = sizeData.map(p => ({ x: (p.timestamp - baseTimestamp) / 86400000, y: p.leadTime }));
+            const reg = linearRegression(regPoints);
+            if (!reg) return;
+            const sMin = Math.min(...sizeData.map(p => p.timestamp));
+            const sMax = Math.max(...sizeData.map(p => p.timestamp));
+            const x1 = (sMin - baseTimestamp) / 86400000;
+            const x2 = (sMax - baseTimestamp) / 86400000;
+            datasets.push({
+                type: 'line',
+                label: `Trend ${size}`,
+                data: [
+                    { x: sMin, y: reg.slope * x1 + reg.intercept },
+                    { x: sMax, y: reg.slope * x2 + reg.intercept }
+                ],
+                borderColor: sizeColors[size],
+                borderWidth: 2,
+                borderDash: [8, 4],
+                pointRadius: 0,
+                pointHoverRadius: 0,
+                fill: false,
+                tension: 0,
+                order: 0
+            });
+        });
+    }
 
-            const ctx = document.getElementById('scatterChart').getContext('2d');
-            if (chart) chart.destroy();
+    return datasets;
+}
 
-            percentilePlugin = {
-                id: 'percentileLines',
-                afterDatasetsDraw(c) {
-                    const {ctx, chartArea: {left, width}, scales: {y}} = c;
-                    const drawLine = (val, color) => {
-                        const yPos = y.getPixelForValue(val);
-                        ctx.strokeStyle = color;
-                        ctx.lineWidth = 3;
-                        ctx.setLineDash([5, 5]);
-                        ctx.beginPath();
-                        ctx.moveTo(left, yPos);
-                        ctx.lineTo(left + width, yPos);
-                        ctx.stroke();
-                        ctx.setLineDash([]);
-                    };
-                    drawLine(p50, '#27ae60');
-                    drawLine(p85, '#f39c12');
-                    drawLine(p95, '#e74c3c');
-                }
+function updateChart(filteredData) {
+    const datasets = [];
+    const baseTimestamp = allPoints.length ? Math.min(...allPoints.map(p => p.timestamp)) : 0;
+
+    ['S', 'M', 'L'].forEach(size => {
+        const sizeData = filteredData.filter(p => p.size === size);
+        datasets.push({
+            type: 'scatter',
+            label: `Rozmiar ${size}`,
+            data: sizeData.map(p => ({ x: p.timestamp, y: p.leadTime, id: p.id, dateLabel: p.dateLabel })),
+            backgroundColor: sizeColors[size],
+            borderColor: sizeColors[size],
+            borderWidth: 2,
+            pointRadius: 6,
+            pointHoverRadius: 9,
+            showLine: false,
+            order: 1
+        });
+    });
+
+    datasets.push(...buildTrendDatasets(filteredData, baseTimestamp));
+
+    const allLeadTimes = filteredData.map(p => p.leadTime);
+    const p50 = calculatePercentile(allLeadTimes, 50);
+    const p85 = calculatePercentile(allLeadTimes, 85);
+    const p95 = calculatePercentile(allLeadTimes, 95);
+
+    const ctx = document.getElementById('scatterChart').getContext('2d');
+    if (chart) chart.destroy();
+
+    const percentilePlugin = {
+        id: 'percentileLines',
+        afterDatasetsDraw(c) {
+            const { ctx, chartArea: { left, width }, scales: { y } } = c;
+            const drawLine = (val, color) => {
+                if (!isFinite(val)) return;
+                const yPos = y.getPixelForValue(val);
+                ctx.save();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2.5;
+                ctx.setLineDash([6, 5]);
+                ctx.beginPath();
+                ctx.moveTo(left, yPos);
+                ctx.lineTo(left + width, yPos);
+                ctx.stroke();
+                ctx.restore();
             };
+            drawLine(p50, '#1e8449');
+            drawLine(p85, '#e67e22');
+            drawLine(p95, '#c0392b');
+        }
+    };
 
-            Chart.register(percentilePlugin);
-            chart = new Chart(ctx, {
-                type: 'scatter',
-                data: {datasets},
-                options: {
-                    responsive: true,
-                    plugins: {
-                        percentileLines: {},
-                        legend: {display: true, position: 'top'},
-                        tooltip: {callbacks: {label: (c) => `Czas: ${c.parsed.y} dni | Data: ${c.raw.date}`}}
-                    },
-                    scales: {
-                        y: {beginAtZero: true, ticks: {callback: v => v + ' dni'}},
-                        x: {display: true}
-                    },
-                    onClick: (e, elements) => {
-                        if (elements.length > 0) {
-                            const id = datasets[elements[0].datasetIndex].data[elements[0].index].id;
-                            hideOutlier(id);
+    let minX, maxX;
+    if (filteredData.length) {
+        const ts = filteredData.map(p => p.timestamp);
+        const span = Math.max(...ts) - Math.min(...ts);
+        const pad = Math.max(span * 0.04, 86400000 * 5);
+        minX = Math.min(...ts) - pad;
+        maxX = Math.max(...ts) + pad;
+    }
+
+    chart = new Chart(ctx, {
+        type: 'scatter',
+        data: { datasets },
+        plugins: [percentilePlugin],
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            interaction: { mode: 'nearest', intersect: true },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: { padding: 14, font: { size: 12, weight: 'bold' }, usePointStyle: true }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            if (context.dataset.type === 'line') {
+                                return `${context.dataset.label}: ${context.parsed.y.toFixed(1)} dni`;
+                            }
+                            return `Czas: ${context.parsed.y} dni | Data: ${context.raw.dateLabel}`;
                         }
                     }
                 }
-            });
-
-            document.getElementById('p50Value').textContent = p50.toFixed(1);
-            document.getElementById('p85Value').textContent = p85.toFixed(1);
-            document.getElementById('p95Value').textContent = p95.toFixed(1);
-        }
-
-        function hideOutlier(id) {
-            const point = allPoints.find(p => p.id === id);
-            if (point && !point.hidden) {
-                point.hidden = true;
-                hiddenOutliers.push(id);
-                updateChart();
-                updateStats();
-                updateOutliersDisplay();
+            },
+            scales: {
+                y: {
+                    title: { display: true, text: 'Czas realizacji (dni)', font: { weight: 'bold' } },
+                    beginAtZero: true,
+                    ticks: { callback: v => v + ' dni' }
+                },
+                x: {
+                    type: 'linear',
+                    min: minX,
+                    max: maxX,
+                    title: { display: true, text: 'Data ukończenia', font: { weight: 'bold' } },
+                    ticks: {
+                        maxTicksLimit: 9,
+                        callback: function (value) { return formatShortDate(value); }
+                    }
+                }
+            },
+            onClick: (e, elements) => {
+                const scatterEls = elements.filter(el => datasets[el.datasetIndex].type === 'scatter');
+                if (scatterEls.length > 0) {
+                    const el = scatterEls[0];
+                    const id = datasets[el.datasetIndex].data[el.index].id;
+                    hideOutlier(id);
+                }
             }
         }
+    });
 
-        function restoreOutlier(id) {
-            const point = allPoints.find(p => p.id === id);
-            if (point && point.hidden) {
-                point.hidden = false;
-                hiddenOutliers = hiddenOutliers.filter(x => x !== id);
-                updateChart();
-                updateStats();
-                updateOutliersDisplay();
-            }
+    document.getElementById('p50Value').textContent = p50.toFixed(1);
+    document.getElementById('p85Value').textContent = p85.toFixed(1);
+    document.getElementById('p95Value').textContent = p95.toFixed(1);
+}
+
+function updateTrendAnalysis(filteredData) {
+    const dirEl = document.getElementById('trendDirection');
+    const detailEl = document.getElementById('trendDetail');
+
+    if (filteredData.length < 3) {
+        dirEl.innerHTML = '—';
+        dirEl.className = 'big-value';
+        detailEl.textContent = 'Za mało danych do wyznaczenia wiarygodnego trendu (min. 3 punkty).';
+        return;
+    }
+
+    const baseTimestamp = Math.min(...filteredData.map(p => p.timestamp));
+    const regPoints = filteredData.map(p => ({ x: (p.timestamp - baseTimestamp) / 86400000, y: p.leadTime }));
+    const reg = linearRegression(regPoints);
+
+    if (!reg) {
+        dirEl.innerHTML = '—';
+        detailEl.textContent = 'Nie udało się wyznaczyć trendu.';
+        return;
+    }
+
+    const perMonth = reg.slope * 30;
+    const threshold = 1.0; // dni/miesiąc poniżej tego uznajemy za stabilny
+
+    let directionLabel, cssClass, arrow;
+    if (perMonth > threshold) {
+        directionLabel = 'Rośnie'; cssClass = 'trend-up'; arrow = '📈';
+    } else if (perMonth < -threshold) {
+        directionLabel = 'Maleje'; cssClass = 'trend-down'; arrow = '📉';
+    } else {
+        directionLabel = 'Stabilny'; cssClass = 'trend-flat'; arrow = '➡️';
+    }
+
+    dirEl.innerHTML = `${arrow} <span class="${cssClass}">${directionLabel}</span>`;
+
+    const r2pct = (reg.r2 * 100).toFixed(0);
+    let confidenceText;
+    if (reg.r2 >= 0.5) confidenceText = 'wysoka pewność trendu';
+    else if (reg.r2 >= 0.2) confidenceText = 'umiarkowana pewność trendu';
+    else confidenceText = 'niska pewność — duży rozrzut danych';
+
+    detailEl.innerHTML = `Zmiana ok. <b>${perMonth >= 0 ? '+' : ''}${perMonth.toFixed(1)} dni/miesiąc</b> ` +
+        `(R² = ${r2pct}%, ${confidenceText}). Obliczone na podstawie ${filteredData.length} widocznych punktów ` +
+        `z zakresu ${formatShortDate(Math.min(...filteredData.map(p=>p.timestamp)))} – ${formatShortDate(Math.max(...filteredData.map(p=>p.timestamp)))}.`;
+}
+
+function updateCorrelationAnalysis(filteredData) {
+    const valEl = document.getElementById('correlationValue');
+    const detailEl = document.getElementById('correlationDetail');
+
+    if (filteredData.length < 3) {
+        valEl.innerHTML = '—';
+        detailEl.textContent = 'Za mało danych do analizy korelacji.';
+        return;
+    }
+
+    const xs = filteredData.map(p => sizeOrdinal[p.size]);
+    const ys = filteredData.map(p => p.leadTime);
+    const r = pearsonCorrelation(xs, ys);
+    const strength = correlationStrength(r);
+
+    valEl.innerHTML = `r = ${r.toFixed(2)} <span class="badge ${strength.css}">${strength.label}</span>`;
+
+    const direction = r > 0.05 ? 'większe elementy (L) trwają dłużej niż mniejsze (S)'
+                     : r < -0.05 ? 'mniejsze elementy trwają (nieoczekiwanie) dłużej niż większe'
+                     : 'rozmiar praktycznie nie różnicuje czasu realizacji';
+
+    detailEl.innerHTML = `Współczynnik korelacji Pearsona między rozmiarem (S=1, M=2, L=3) a czasem realizacji ` +
+        `wynosi <b>${r.toFixed(2)}</b>. Oznacza to, że ${direction}. ` +
+        (Math.abs(r) < 0.3
+            ? 'Czas realizacji zależy głównie od innych czynników niż sam rozmiar zadania.'
+            : 'Rozmiar zadania ma zauważalny wpływ na czas realizacji.');
+}
+
+function updateSizeStatsTable(filteredData) {
+    const tbody = document.getElementById('sizeStatsBody');
+    tbody.innerHTML = '';
+    ['S', 'M', 'L'].forEach(size => {
+        const values = filteredData.filter(p => p.size === size).map(p => p.leadTime);
+        if (values.length === 0) {
+            tbody.innerHTML += `<tr><td><span class="size-dot" style="background:${sizeColors[size]}"></span>${size}</td><td colspan="5">brak danych</td></tr>`;
+            return;
         }
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const med = median(values);
+        const avg = values.reduce((a, b) => a + b, 0) / values.length;
+        tbody.innerHTML += `<tr>
+            <td><span class="size-dot" style="background:${sizeColors[size]}"></span>${size}</td>
+            <td>${values.length}</td>
+            <td>${min.toFixed(0)}</td>
+            <td>${med.toFixed(0)}</td>
+            <td>${avg.toFixed(0)}</td>
+            <td>${max.toFixed(0)}</td>
+        </tr>`;
+    });
+}
 
-        function removeAllOutliers() {
-            allPoints.filter(p => !p.hidden).forEach(p => p.hidden = true);
-            hiddenOutliers = allPoints.map(p => p.id);
-            updateChart();
-            updateStats();
-            updateOutliersDisplay();
-        }
+function hideOutlier(id) {
+    const point = allPoints.find(p => p.id === id);
+    if (point && !point.hidden) {
+        point.hidden = true;
+        renderAll();
+    }
+}
 
-        function restoreAllOutliers() {
-            allPoints.forEach(p => p.hidden = false);
-            hiddenOutliers = [];
-            updateChart();
-            updateStats();
-            updateOutliersDisplay();
-        }
+function restoreOutlier(id) {
+    const point = allPoints.find(p => p.id === id);
+    if (point && point.hidden) {
+        point.hidden = false;
+        renderAll();
+    }
+}
 
-        function updateOutliersDisplay() {
-            const container = document.getElementById('outliersContainer');
-            const hidden = allPoints.filter(p => p.hidden);
-            if (hidden.length === 0) {
-                container.innerHTML = '';
-                return;
-            }
-            container.innerHTML = `<div class="outliers-info"><strong>🔍 Ukryte elementy (${hidden.length}):</strong>${hidden.map(p => `<div class="outlier-item"><span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${sizeColors[p.size]};margin-right:8px;"></span>${p.date} - ${p.size}: <strong>${p.leadTime}</strong> dni</span><button class="btn-small btn-success" onclick="restoreOutlier(${p.id})">Przywróć</button></div>`).join('')}</div>`;
-        }
+function removeAllOutliers() {
+    getFilteredData().forEach(p => { p.hidden = true; });
+    renderAll();
+}
 
-        function updateStats() {
-            const filteredData = getFilteredData();
-            const leadTimes = filteredData.map(p => p.leadTime);
-            document.getElementById('dataCount').textContent = filteredData.length;
-            document.getElementById('avgTime').textContent = leadTimes.length > 0 ? (leadTimes.reduce((a, b) => a + b) / leadTimes.length).toFixed(1) : 0;
-            document.getElementById('minTime').textContent = leadTimes.length > 0 ? Math.min(...leadTimes) : 0;
-            document.getElementById('maxTime').textContent = leadTimes.length > 0 ? Math.max(...leadTimes) : 0;
-        }
+function restoreAllOutliers() {
+    allPoints.forEach(p => p.hidden = false);
+    renderAll();
+}
 
-        function resetFilters() {
-            document.querySelectorAll('.size-filter-checkbox').forEach(cb => cb.checked = true);
-            allPoints.forEach(p => p.hidden = false);
-            hiddenOutliers = [];
-            updateChart();
-            updateStats();
-            updateOutliersDisplay();
-        }
+function updateOutliersDisplay() {
+    const container = document.getElementById('outliersContainer');
+    const hidden = allPoints.filter(p => p.hidden);
+    if (hidden.length === 0) { container.innerHTML = ''; return; }
 
-        function addNewDataPoint() {
-            const size = document.getElementById('newSize').value;
-            const leadTime = parseFloat(document.getElementById('newLeadTime').value);
-            const date = document.getElementById('newDate').value;
-            if (!size || !leadTime || !date || isNaN(leadTime)) {
-                alert('Proszę wypełnić wszystkie pola');
-                return;
-            }
-            const formattedDate = new Date(date).toLocaleDateString('pl-PL', {day: 'numeric', month: 'long', year: 'numeric'});
-            allPoints.push({date: formattedDate, size, leadTime, id: Math.max(...allPoints.map(p => p.id), -1) + 1, hidden: false});
-            document.getElementById('newSize').value = 'S';
-            document.getElementById('newLeadTime').value = '';
-            document.getElementById('newDate').value = '';
-            updateChart();
-            updateStats();
-            alert('✅ Punkt danych dodany pomyślnie!');
-        }
+    container.innerHTML = `
+        <div class="outliers-info">
+            <strong>🔍 Ukryte elementy (${hidden.length}):</strong>
+            ${hidden.map(p => `
+                <div class="outlier-item">
+                    <span>
+                        <span class="size-dot" style="background:${sizeColors[p.size]}"></span>
+                        ${p.dateLabel} — ${p.size}: <strong>${p.leadTime}</strong> dni
+                    </span>
+                    <button class="btn-small btn-success" onclick="restoreOutlier(${p.id})">Przywróć</button>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
 
-        document.querySelectorAll('.size-filter-checkbox').forEach(cb => cb.addEventListener('change', () => {
-            updateChart();
-            updateStats();
-        }));
+function updateStats(filteredData) {
+    const leadTimes = filteredData.map(p => p.leadTime);
+    document.getElementById('dataCount').textContent = filteredData.length;
+    document.getElementById('avgTime').textContent = leadTimes.length > 0 ? (leadTimes.reduce((a, b) => a + b) / leadTimes.length).toFixed(1) : 0;
+    document.getElementById('minTime').textContent = leadTimes.length > 0 ? Math.min(...leadTimes) : 0;
+    document.getElementById('maxTime').textContent = leadTimes.length > 0 ? Math.max(...leadTimes) : 0;
+}
 
-        window.addEventListener('load', initializeData);
-    </script>
+function resetFilters() {
+    document.querySelectorAll('.size-filter-checkbox').forEach(cb => cb.checked = true);
+    allPoints.forEach(p => p.hidden = false);
+    document.getElementById('toggleTrendLine').checked = true;
+    document.getElementById('togglePerSizeTrend').checked = false;
+    renderAll();
+}
+
+function addNewDataPoint() {
+    const size = document.getElementById('newSize').value;
+    const leadTime = parseFloat(document.getElementById('newLeadTime').value);
+    const date = document.getElementById('newDate').value;
+
+    if (!size || !leadTime || !date || isNaN(leadTime)) {
+        alert('Proszę wypełnić wszystkie pola');
+        return;
+    }
+
+    const dateObj = new Date(date + 'T00:00:00');
+    const dateLabel = `${dateObj.getDate()} ${['Stycznia','Lutego','Marca','Kwietnia','Maja','Czerwca','Lipca','Sierpnia','Września','Października','Listopada','Grudnia'][dateObj.getMonth()]} ${dateObj.getFullYear()}`;
+
+    allPoints.push({
+        id: Math.max(...allPoints.map(p => p.id), -1) + 1,
+        dateLabel,
+        timestamp: dateObj.getTime(),
+        size,
+        leadTime,
+        hidden: false
+    });
+
+    document.getElementById('newLeadTime').value = '';
+    document.getElementById('newDate').value = '';
+
+    renderAll();
+    alert('✅ Punkt danych dodany pomyślnie!');
+}
+
+document.querySelectorAll('.size-filter-checkbox').forEach(cb => cb.addEventListener('change', renderAll));
+document.getElementById('toggleTrendLine').addEventListener('change', renderAll);
+document.getElementById('togglePerSizeTrend').addEventListener('change', renderAll);
+
+window.addEventListener('load', initializeData);
+</script>
 </body>
 </html>
