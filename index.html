@@ -483,25 +483,15 @@
         </div>
 
         <div class="chart-container">
-            <div class="chart-title">Wykres X — wartości indywidualne (dostarczone elementy / dzień)</div>
+            <div class="chart-title">Wykres Kontrolny X (Wartości Indywidualne)</div>
             <canvas id="xChart"></canvas>
-            <div class="percentile-legend">
-                <div class="percentile-line"><span class="dash trend-dash"></span>X̄ (średnia): <b id="xmrMeanLegend">0</b></div>
-                <div class="percentile-line"><span class="dash p85-dash"></span>UCL = X̄ + 2,66·MR̄: <b id="xmrUclXLegend">0</b></div>
-                <div class="percentile-line"><span class="dash p95-dash"></span>LCL = X̄ − 2,66·MR̄: <b id="xmrLclXLegend">0</b></div>
-            </div>
-            <div class="tooltip-hint">💡 Czerwone punkty leżą poza granicami kontrolnymi (przyczyna specjalna, nietypowy dzień).</div>
+            <div class="tooltip-hint">💡 Oś X = numer kolejnej próbki (dnia). Czerwone, większe punkty leżą poza granicami kontrolnymi (przyczyna specjalna, nietypowy dzień).</div>
         </div>
 
         <div class="chart-container">
-            <div class="chart-title">Wykres MR — ruchomy rozstęp (|dzień N − dzień N-1|)</div>
+            <div class="chart-title">Wykres Kontrolny MR (Ruchoma Rozpiętość)</div>
             <canvas id="mrChart"></canvas>
-            <div class="percentile-legend">
-                <div class="percentile-line"><span class="dash trend-dash"></span>MR̄ (średni rozstęp): <b id="xmrMrMeanLegend">0</b></div>
-                <div class="percentile-line"><span class="dash p95-dash"></span>UCL = 3,27·MR̄: <b id="xmrUclMrLegend">0</b></div>
-                <div class="percentile-line"><span class="dash p50-dash"></span>LCL = 0</div>
-            </div>
-            <div class="tooltip-hint">💡 Wykres MR pokazuje, o ile wartość w wykresie X zmieniła się względem poprzedniego dnia (np. 3, 1, 2, 7 dni różnicy).</div>
+            <div class="tooltip-hint">💡 MR pokazuje, o ile wartość zmieniła się względem poprzedniej próbki (np. 3, 1, 2, 7...). Punkty powyżej czerwonej linii UCL sygnalizują nagły, nietypowy skok tempa.</div>
         </div>
 
         <div id="xmrSignalsContainer"></div>
@@ -1393,6 +1383,7 @@ function computeXmrStats(data) {
     const movingRanges = [];
     for (let i = 1; i < n; i++) {
         movingRanges.push({
+            sampleNumber: i + 1,
             ts: data[i].timestamp,
             dateLabel: data[i].dateLabel,
             mr: Math.abs(data[i].value - data[i - 1].value)
@@ -1408,51 +1399,79 @@ function computeXmrStats(data) {
     return { mean, mrMean, uclX, lclX, uclMr, lclMr, movingRanges };
 }
 
-// Generyczny plugin Chart.js do rysowania poziomych linii odniesienia (średnia, UCL, LCL)
-const referenceLinesPlugin = {
-    id: 'referenceLines',
-    afterDatasetsDraw(c) {
-        const opts = (c.options.plugins && c.options.plugins.referenceLines) || {};
-        const { ctx, chartArea: { left, width }, scales: { y } } = c;
-        (opts.lines || []).forEach(line => {
-            if (!isFinite(line.value)) return;
-            const yPos = y.getPixelForValue(line.value);
-            ctx.save();
-            ctx.strokeStyle = line.color;
-            ctx.lineWidth = line.width || 2.5;
-            ctx.setLineDash(line.dash || [6, 5]);
-            ctx.beginPath();
-            ctx.moveTo(left, yPos);
-            ctx.lineTo(left + width, yPos);
-            ctx.stroke();
-            ctx.restore();
-        });
-    }
-};
-if (typeof Chart !== 'undefined' && Chart.register) Chart.register(referenceLinesPlugin);
-
 function renderXChart(data, stats) {
     const ctx = document.getElementById('xChart').getContext('2d');
     if (xChart) xChart.destroy();
 
-    const pointColors = data.map(p => (p.value > stats.uclX || p.value < stats.lclX) ? '#c0392b' : '#8e44ad');
+    const n = data.length;
+    const points = data.map((p, idx) => ({ x: idx + 1, y: p.value, dateLabel: p.dateLabel }));
+    const outliers = points.filter(p => p.y > stats.uclX || p.y < stats.lclX);
+    const lclDisplay = Math.max(0, stats.lclX);
 
     xChart = new Chart(ctx, {
         type: 'scatter',
         data: {
             datasets: [
                 {
-                    label: 'Przepustowość dzienna',
-                    data: data.map(p => ({ x: p.timestamp, y: p.value, dateLabel: p.dateLabel })),
+                    label: 'X',
+                    data: points,
                     showLine: true,
-                    borderColor: '#b9a7d6',
-                    borderWidth: 1.5,
-                    backgroundColor: pointColors,
-                    pointBackgroundColor: pointColors,
-                    pointBorderColor: pointColors,
-                    pointRadius: 4,
-                    pointHoverRadius: 7,
-                    tension: 0
+                    borderColor: '#2980b9',
+                    borderWidth: 2,
+                    backgroundColor: '#2980b9',
+                    pointBackgroundColor: '#2980b9',
+                    pointBorderColor: '#2980b9',
+                    pointRadius: 5,
+                    pointHoverRadius: 8,
+                    tension: 0,
+                    order: 2
+                },
+                {
+                    label: 'Wartość odstająca',
+                    data: outliers,
+                    showLine: false,
+                    backgroundColor: '#c0392b',
+                    borderColor: '#c0392b',
+                    pointRadius: 9,
+                    pointHoverRadius: 11,
+                    pointStyle: 'circle',
+                    order: 1
+                },
+                {
+                    label: `CL = ${stats.mean.toFixed(2)}`,
+                    data: [{ x: 1, y: stats.mean }, { x: n, y: stats.mean }],
+                    type: 'line',
+                    borderColor: '#1e8449',
+                    borderWidth: 2,
+                    borderDash: [8, 5],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    fill: false,
+                    order: 3
+                },
+                {
+                    label: `UCL = ${stats.uclX.toFixed(2)}`,
+                    data: [{ x: 1, y: stats.uclX }, { x: n, y: stats.uclX }],
+                    type: 'line',
+                    borderColor: '#c0392b',
+                    borderWidth: 2,
+                    borderDash: [10, 4, 2, 4],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    fill: false,
+                    order: 3
+                },
+                {
+                    label: `LCL = ${lclDisplay.toFixed(2)}`,
+                    data: [{ x: 1, y: stats.lclX }, { x: n, y: stats.lclX }],
+                    type: 'line',
+                    borderColor: '#c0392b',
+                    borderWidth: 2,
+                    borderDash: [10, 4, 2, 4],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    fill: false,
+                    order: 3
                 }
             ]
         },
@@ -1460,29 +1479,33 @@ function renderXChart(data, stats) {
             responsive: true,
             maintainAspectRatio: true,
             plugins: {
-                legend: { display: false },
+                legend: { display: true, position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 14, font: { size: 11.5 } } },
                 tooltip: {
                     callbacks: {
-                        label: (context) => `${context.raw.dateLabel}: ${context.parsed.y} elem.`
+                        label: (context) => {
+                            if (context.dataset.label.startsWith('CL') || context.dataset.label.startsWith('UCL') || context.dataset.label.startsWith('LCL')) {
+                                return context.dataset.label;
+                            }
+                            return `${context.raw.dateLabel}: ${context.parsed.y} elem. (próbka #${context.parsed.x})`;
+                        }
                     }
-                },
-                referenceLines: {
-                    lines: [
-                        { value: stats.mean, color: '#1e2a4a', dash: [], width: 3 },
-                        { value: stats.uclX, color: '#e67e22', dash: [6, 5] },
-                        { value: stats.lclX, color: '#c0392b', dash: [6, 5] }
-                    ]
                 }
             },
             scales: {
                 y: {
-                    title: { display: true, text: 'Elementy dostarczone / dzień', font: { weight: 'bold' } },
-                    beginAtZero: true
+                    title: { display: true, text: 'Wartość pomiaru (elem./dzień)', font: { weight: 'bold' } },
+                    beginAtZero: true,
+                    grid: { color: '#eee' },
+                    border: { color: '#999' }
                 },
                 x: {
                     type: 'linear',
-                    title: { display: true, text: 'Data', font: { weight: 'bold' } },
-                    ticks: { maxTicksLimit: 10, callback: (value) => formatShortDate(value) }
+                    min: 1,
+                    max: n,
+                    title: { display: true, text: 'Numer próbki', font: { weight: 'bold' } },
+                    ticks: { stepSize: Math.max(1, Math.round(n / 15)), precision: 0 },
+                    grid: { color: '#eee' },
+                    border: { color: '#999' }
                 }
             }
         }
@@ -1494,19 +1517,51 @@ function renderMrChart(stats) {
     if (mrChart) mrChart.destroy();
 
     const mrData = stats.movingRanges;
-    const barColors = mrData.map(m => m.mr > stats.uclMr ? '#c0392b' : '#8e44ad');
+    const firstSample = mrData[0].sampleNumber;
+    const lastSample = mrData[mrData.length - 1].sampleNumber;
+    const points = mrData.map(m => ({ x: m.sampleNumber, y: m.mr, dateLabel: m.dateLabel }));
 
     mrChart = new Chart(ctx, {
-        type: 'bar',
+        type: 'scatter',
         data: {
-            labels: mrData.map(m => formatShortDate(m.ts)),
             datasets: [
                 {
-                    label: 'Ruchomy rozstęp (MR)',
-                    data: mrData.map(m => m.mr),
-                    backgroundColor: barColors,
-                    borderColor: barColors,
-                    borderWidth: 1
+                    label: 'MR',
+                    data: points,
+                    showLine: true,
+                    borderColor: '#e67e22',
+                    borderWidth: 2,
+                    backgroundColor: '#e67e22',
+                    pointBackgroundColor: '#e67e22',
+                    pointBorderColor: '#e67e22',
+                    pointRadius: 5,
+                    pointHoverRadius: 8,
+                    tension: 0,
+                    order: 2
+                },
+                {
+                    label: `CL = ${stats.mrMean.toFixed(2)}`,
+                    data: [{ x: firstSample, y: stats.mrMean }, { x: lastSample, y: stats.mrMean }],
+                    type: 'line',
+                    borderColor: '#1e8449',
+                    borderWidth: 2,
+                    borderDash: [8, 5],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    fill: false,
+                    order: 3
+                },
+                {
+                    label: `UCL = ${stats.uclMr.toFixed(2)}`,
+                    data: [{ x: firstSample, y: stats.uclMr }, { x: lastSample, y: stats.uclMr }],
+                    type: 'line',
+                    borderColor: '#c0392b',
+                    borderWidth: 2,
+                    borderDash: [10, 4, 2, 4],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    fill: false,
+                    order: 3
                 }
             ]
         },
@@ -1514,27 +1569,33 @@ function renderMrChart(stats) {
             responsive: true,
             maintainAspectRatio: true,
             plugins: {
-                legend: { display: false },
+                legend: { display: true, position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 14, font: { size: 11.5 } } },
                 tooltip: {
                     callbacks: {
-                        label: (context) => `MR: ${context.parsed.y.toFixed(1)}`
+                        label: (context) => {
+                            if (context.dataset.label.startsWith('CL') || context.dataset.label.startsWith('UCL')) {
+                                return context.dataset.label;
+                            }
+                            return `${context.raw.dateLabel}: MR = ${context.parsed.y.toFixed(1)} (próbka #${context.parsed.x})`;
+                        }
                     }
-                },
-                referenceLines: {
-                    lines: [
-                        { value: stats.mrMean, color: '#1e2a4a', dash: [], width: 3 },
-                        { value: stats.uclMr, color: '#c0392b', dash: [6, 5] },
-                        { value: 0, color: '#1e8449', dash: [6, 5] }
-                    ]
                 }
             },
             scales: {
                 y: {
-                    title: { display: true, text: 'Ruchomy rozstęp (MR)', font: { weight: 'bold' } },
-                    beginAtZero: true
+                    title: { display: true, text: 'Rozpiętość MR', font: { weight: 'bold' } },
+                    beginAtZero: true,
+                    grid: { color: '#eee' },
+                    border: { color: '#999' }
                 },
                 x: {
-                    ticks: { maxTicksLimit: 10, autoSkip: true }
+                    type: 'linear',
+                    min: firstSample,
+                    max: lastSample,
+                    title: { display: true, text: 'Numer próbki', font: { weight: 'bold' } },
+                    ticks: { stepSize: Math.max(1, Math.round((lastSample - firstSample) / 15)), precision: 0 },
+                    grid: { color: '#eee' },
+                    border: { color: '#999' }
                 }
             }
         }
@@ -1607,12 +1668,6 @@ function renderXmr() {
     document.getElementById('xmrUclX').textContent = stats.uclX.toFixed(1);
     document.getElementById('xmrLclX').textContent = Math.max(0, stats.lclX).toFixed(1);
     document.getElementById('xmrUclMr').textContent = stats.uclMr.toFixed(1);
-
-    document.getElementById('xmrMeanLegend').textContent = stats.mean.toFixed(1);
-    document.getElementById('xmrUclXLegend').textContent = stats.uclX.toFixed(1);
-    document.getElementById('xmrLclXLegend').textContent = stats.lclX.toFixed(1);
-    document.getElementById('xmrMrMeanLegend').textContent = stats.mrMean.toFixed(1);
-    document.getElementById('xmrUclMrLegend').textContent = stats.uclMr.toFixed(1);
 
     renderXChart(data, stats);
     renderMrChart(stats);
