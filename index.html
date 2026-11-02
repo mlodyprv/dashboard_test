@@ -1426,15 +1426,15 @@ function computeXmrStats(data) {
     };
 }
 
-function renderXChart(data, stats) {
+function renderXChart(data, stats, rangeFrom, rangeTo) {
     const ctx = document.getElementById('xChart').getContext('2d');
     if (xChart) xChart.destroy();
 
     const points = data.map(p => ({ x: p.timestamp, y: p.value, dateLabel: p.dateLabel }));
     const outliers = points.filter(p => p.y > stats.uclX || p.y < stats.lclX);
     const lclDisplay = Math.max(0, stats.lclX);
-    const minX = points[0].x;
-    const maxX = points[points.length - 1].x;
+    const minX = rangeFrom !== null && rangeFrom !== undefined ? rangeFrom : points[0].x;
+    const maxX = rangeTo !== null && rangeTo !== undefined ? rangeTo : points[points.length - 1].x;
 
     xChart = new Chart(ctx, {
         type: 'scatter',
@@ -1543,13 +1543,13 @@ function renderXChart(data, stats) {
     });
 }
 
-function renderMrChart(stats) {
+function renderMrChart(stats, rangeFrom, rangeTo) {
     const ctx = document.getElementById('mrChart').getContext('2d');
     if (mrChart) mrChart.destroy();
 
     const mrData = stats.movingRanges;
-    const firstX = mrData[0].ts;
-    const lastX = mrData[mrData.length - 1].ts;
+    const firstX = rangeFrom !== null && rangeFrom !== undefined ? rangeFrom : mrData[0].ts;
+    const lastX = rangeTo !== null && rangeTo !== undefined ? rangeTo : mrData[mrData.length - 1].ts;
     const points = mrData.map(m => ({ x: m.ts, y: m.mr, dateLabel: m.dateLabel }));
 
     mrChart = new Chart(ctx, {
@@ -1703,8 +1703,15 @@ function renderXmr() {
     document.getElementById('xmrLclX').textContent = Math.max(0, stats.lclX).toFixed(1);
     document.getElementById('xmrUclMr').textContent = stats.uclMr.toFixed(1);
 
-    renderXChart(data, stats);
-    renderMrChart(stats);
+    // Oś X obu wykresów respektuje wybrany zakres dat (filtr Od/Do),
+    // a nie tylko pierwszy/ostatni dostępny punkt danych.
+    const fromVal = document.getElementById('xmrDateFrom').value;
+    const toVal = document.getElementById('xmrDateTo').value;
+    const rangeFrom = fromVal ? new Date(fromVal + 'T00:00:00').getTime() : null;
+    const rangeTo = toVal ? new Date(toVal + 'T23:59:59').getTime() : null;
+
+    renderXChart(data, stats, rangeFrom, rangeTo);
+    renderMrChart(stats, rangeFrom, rangeTo);
     updateXmrStability(data, stats);
     updateXmrSignalsList(data, stats);
 }
