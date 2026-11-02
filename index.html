@@ -442,6 +442,7 @@
             Wykres <b>X</b> pokazuje wartości indywidualne względem średniej (X̄) z granicami naturalnymi X̄ ± 2,66·MR̄.
             Wykres <b>MR</b> pokazuje ruchomy rozstęp (różnicę między kolejnymi dniami) z górną granicą 3,27·MR̄ (dolna zawsze = 0).
             Punkty poza granicami kontrolnymi (czerwone) sygnalizują przyczyny specjalne — sygnał, by zareagować i spróbować sterować procesem.
+            Granice liczone są <b>standardowym, dwuetapowym algorytmem</b>: najpierw wyznaczane są wstępne X̄/MR̄ i granice na całym zbiorze, następnie punkty poza tymi wstępnymi granicami (wartości skrajne) są odrzucane, a X̄/MR̄ i ostateczne granice kontrolne liczone są ponownie na „czystych” danych — dzięki temu pojedyncza anomalia nie zawyża/zaniża granic dla reszty procesu.
         </div>
 
         <div class="stats-grid">
@@ -485,13 +486,13 @@
         <div class="chart-container">
             <div class="chart-title">Wykres Kontrolny X (Wartości Indywidualne)</div>
             <canvas id="xChart"></canvas>
-            <div class="tooltip-hint">💡 Oś X = numer kolejnej próbki (dnia). Czerwone, większe punkty leżą poza granicami kontrolnymi (przyczyna specjalna, nietypowy dzień).</div>
+            <div class="tooltip-hint">💡 Oś X pokazuje rzeczywistą oś czasu (daty) — steruj zakresem przez filtr dat powyżej. Czerwone, większe punkty leżą poza granicami kontrolnymi (przyczyna specjalna, nietypowy dzień).</div>
         </div>
 
         <div class="chart-container">
             <div class="chart-title">Wykres Kontrolny MR (Ruchoma Rozpiętość)</div>
             <canvas id="mrChart"></canvas>
-            <div class="tooltip-hint">💡 MR pokazuje, o ile wartość zmieniła się względem poprzedniej próbki (np. 3, 1, 2, 7...). Punkty powyżej czerwonej linii UCL sygnalizują nagły, nietypowy skok tempa.</div>
+            <div class="tooltip-hint">💡 MR pokazuje, o ile wartość zmieniła się względem poprzedniego dnia (np. 3, 1, 2, 7...). Oś X to ta sama skala czasowa co wykres X. Punkty powyżej czerwonej linii UCL sygnalizują nagły, nietypowy skok tempa.</div>
         </div>
 
         <div id="xmrSignalsContainer"></div>
@@ -1375,10 +1376,15 @@ function clearXmrDateRange() {
 // i granice kontrolne wg standardowych stałych dla wykresów indywidualnych (n=2):
 // UCL_X/LCL_X = X̄ ± 2.66·MR̄ ; UCL_MR = 3.27·MR̄ ; LCL_MR = 0
 function computeXmrStats(data) {
+    // Standardowy, dwuetapowy algorytm X-MR (Individuals / Moving Range):
+    // 1) policz wstępne X-bar i MR-bar na WSZYSTKICH punktach,
+    // 2) wyznacz wstępne granice kontrolne (UCL/LCL),
+    // 3) odrzuć punkty X leżące poza wstępnymi granicami (przyczyny specjalne),
+    // 4) przelicz "czyste" X-bar / MR-bar tylko z pozostałych punktów,
+    // 5) ostateczne granice kontrolne liczone są z czystych średnich.
     const n = data.length;
     if (n < 2) return null;
     const values = data.map(p => p.value);
-    const mean = values.reduce((a, b) => a + b, 0) / n;
 
     const movingRanges = [];
     for (let i = 1; i < n; i++) {
@@ -1389,24 +1395,46 @@ function computeXmrStats(data) {
             mr: Math.abs(data[i].value - data[i - 1].value)
         });
     }
-    const mrMean = movingRanges.reduce((a, m) => a + m.mr, 0) / movingRanges.length;
+
+    // --- Krok 1-2: wstępne statystyki i granice (na pełnym zbiorze) ---
+    const meanInitial = values.reduce((a, b) => a + b, 0) / n;
+    const mrMeanInitial = movingRanges.reduce((a, m) => a + m.mr, 0) / movingRanges.length;
+    const uclXInitial = meanInitial + 2.66 * mrMeanInitial;
+    const lclXInitial = meanInitial - 2.66 * mrMeanInitial;
+
+    // --- Krok 3: filtrowanie wartości skrajnych (poza wstępnymi granicami) ---
+    const cleanValues = values.filter(v => v >= lclXInitial && v <= uclXInitial);
+    const cleanMrValues = movingRanges
+        .filter(m => {
+            const v = data[m.sampleNumber - 1].value;
+            return v >= lclXInitial && v <= uclXInitial;
+        })
+        .map(m => m.mr);
+
+    // --- Krok 4-5: czyste (ostateczne) statystyki i granice kontrolne ---
+    const mean = cleanValues.length ? cleanValues.reduce((a, b) => a + b, 0) / cleanValues.length : meanInitial;
+    const mrMean = cleanMrValues.length ? cleanMrValues.reduce((a, b) => a + b, 0) / cleanMrValues.length : mrMeanInitial;
 
     const uclX = mean + 2.66 * mrMean;
     const lclX = mean - 2.66 * mrMean;
-    const uclMr = 3.27 * mrMean;
+    const uclMr = 3.267 * mrMean;
     const lclMr = 0;
 
-    return { mean, mrMean, uclX, lclX, uclMr, lclMr, movingRanges };
+    return {
+        mean, mrMean, uclX, lclX, uclMr, lclMr, movingRanges,
+        meanInitial, mrMeanInitial, uclXInitial, lclXInitial
+    };
 }
 
 function renderXChart(data, stats) {
     const ctx = document.getElementById('xChart').getContext('2d');
     if (xChart) xChart.destroy();
 
-    const n = data.length;
-    const points = data.map((p, idx) => ({ x: idx + 1, y: p.value, dateLabel: p.dateLabel }));
+    const points = data.map(p => ({ x: p.timestamp, y: p.value, dateLabel: p.dateLabel }));
     const outliers = points.filter(p => p.y > stats.uclX || p.y < stats.lclX);
     const lclDisplay = Math.max(0, stats.lclX);
+    const minX = points[0].x;
+    const maxX = points[points.length - 1].x;
 
     xChart = new Chart(ctx, {
         type: 'scatter',
@@ -1439,7 +1467,7 @@ function renderXChart(data, stats) {
                 },
                 {
                     label: `CL = ${stats.mean.toFixed(2)}`,
-                    data: [{ x: 1, y: stats.mean }, { x: n, y: stats.mean }],
+                    data: [{ x: minX, y: stats.mean }, { x: maxX, y: stats.mean }],
                     type: 'line',
                     borderColor: '#1e8449',
                     borderWidth: 2,
@@ -1451,7 +1479,7 @@ function renderXChart(data, stats) {
                 },
                 {
                     label: `UCL = ${stats.uclX.toFixed(2)}`,
-                    data: [{ x: 1, y: stats.uclX }, { x: n, y: stats.uclX }],
+                    data: [{ x: minX, y: stats.uclX }, { x: maxX, y: stats.uclX }],
                     type: 'line',
                     borderColor: '#c0392b',
                     borderWidth: 2,
@@ -1463,7 +1491,7 @@ function renderXChart(data, stats) {
                 },
                 {
                     label: `LCL = ${lclDisplay.toFixed(2)}`,
-                    data: [{ x: 1, y: stats.lclX }, { x: n, y: stats.lclX }],
+                    data: [{ x: minX, y: stats.lclX }, { x: maxX, y: stats.lclX }],
                     type: 'line',
                     borderColor: '#c0392b',
                     borderWidth: 2,
@@ -1486,7 +1514,7 @@ function renderXChart(data, stats) {
                             if (context.dataset.label.startsWith('CL') || context.dataset.label.startsWith('UCL') || context.dataset.label.startsWith('LCL')) {
                                 return context.dataset.label;
                             }
-                            return `${context.raw.dateLabel}: ${context.parsed.y} elem. (próbka #${context.parsed.x})`;
+                            return `${context.raw.dateLabel}: ${context.parsed.y} elem./dzień`;
                         }
                     }
                 }
@@ -1500,10 +1528,13 @@ function renderXChart(data, stats) {
                 },
                 x: {
                     type: 'linear',
-                    min: 1,
-                    max: n,
-                    title: { display: true, text: 'Numer próbki', font: { weight: 'bold' } },
-                    ticks: { stepSize: Math.max(1, Math.round(n / 15)), precision: 0 },
+                    min: minX,
+                    max: maxX,
+                    title: { display: true, text: 'Data', font: { weight: 'bold' } },
+                    ticks: {
+                        maxTicksLimit: 12,
+                        callback: function (value) { return formatShortDate(value); }
+                    },
                     grid: { color: '#eee' },
                     border: { color: '#999' }
                 }
@@ -1517,9 +1548,9 @@ function renderMrChart(stats) {
     if (mrChart) mrChart.destroy();
 
     const mrData = stats.movingRanges;
-    const firstSample = mrData[0].sampleNumber;
-    const lastSample = mrData[mrData.length - 1].sampleNumber;
-    const points = mrData.map(m => ({ x: m.sampleNumber, y: m.mr, dateLabel: m.dateLabel }));
+    const firstX = mrData[0].ts;
+    const lastX = mrData[mrData.length - 1].ts;
+    const points = mrData.map(m => ({ x: m.ts, y: m.mr, dateLabel: m.dateLabel }));
 
     mrChart = new Chart(ctx, {
         type: 'scatter',
@@ -1541,7 +1572,7 @@ function renderMrChart(stats) {
                 },
                 {
                     label: `CL = ${stats.mrMean.toFixed(2)}`,
-                    data: [{ x: firstSample, y: stats.mrMean }, { x: lastSample, y: stats.mrMean }],
+                    data: [{ x: firstX, y: stats.mrMean }, { x: lastX, y: stats.mrMean }],
                     type: 'line',
                     borderColor: '#1e8449',
                     borderWidth: 2,
@@ -1553,7 +1584,7 @@ function renderMrChart(stats) {
                 },
                 {
                     label: `UCL = ${stats.uclMr.toFixed(2)}`,
-                    data: [{ x: firstSample, y: stats.uclMr }, { x: lastSample, y: stats.uclMr }],
+                    data: [{ x: firstX, y: stats.uclMr }, { x: lastX, y: stats.uclMr }],
                     type: 'line',
                     borderColor: '#c0392b',
                     borderWidth: 2,
@@ -1576,7 +1607,7 @@ function renderMrChart(stats) {
                             if (context.dataset.label.startsWith('CL') || context.dataset.label.startsWith('UCL')) {
                                 return context.dataset.label;
                             }
-                            return `${context.raw.dateLabel}: MR = ${context.parsed.y.toFixed(1)} (próbka #${context.parsed.x})`;
+                            return `${context.raw.dateLabel}: MR = ${context.parsed.y.toFixed(1)}`;
                         }
                     }
                 }
@@ -1590,10 +1621,13 @@ function renderMrChart(stats) {
                 },
                 x: {
                     type: 'linear',
-                    min: firstSample,
-                    max: lastSample,
-                    title: { display: true, text: 'Numer próbki', font: { weight: 'bold' } },
-                    ticks: { stepSize: Math.max(1, Math.round((lastSample - firstSample) / 15)), precision: 0 },
+                    min: firstX,
+                    max: lastX,
+                    title: { display: true, text: 'Data', font: { weight: 'bold' } },
+                    ticks: {
+                        maxTicksLimit: 12,
+                        callback: function (value) { return formatShortDate(value); }
+                    },
                     grid: { color: '#eee' },
                     border: { color: '#999' }
                 }
