@@ -245,6 +245,25 @@
     }
     .input-group input:focus, .input-group select:focus { outline: none; border-color: #3a3f7d; }
 
+    /* ===== Tabs ===== */
+    .tabs {
+        display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 2px solid #e1e4ef; flex-wrap: wrap;
+    }
+    .tab-button {
+        background: none; border: none; padding: 12px 20px; font-size: 1em; font-weight: 600;
+        color: #777; cursor: pointer; border-bottom: 3px solid transparent; border-radius: 0;
+        transition: all 0.2s;
+    }
+    .tab-button:hover { color: #3a3f7d; background: #f6f7fb; }
+    .tab-button.active { color: #1e2a4a; border-bottom-color: #3a3f7d; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .xmr-intro {
+        background: #f0eefc; border-left: 5px solid #8e44ad; border-radius: 10px;
+        padding: 16px 20px; margin-bottom: 24px; font-size: 0.92em; color: #333; line-height: 1.6;
+    }
+
     /* ===== Throughput (tempo dostarczania) ===== */
     .throughput-header {
         display: flex; justify-content: space-between; align-items: center;
@@ -277,6 +296,12 @@
         <p>Scatterplot w czasie, prognozy percentylowe, analiza zależności czasu realizacji od rozmiaru oraz tempa dostarczania — z filtrem zakresu dat</p>
     </div>
 
+    <div class="tabs">
+        <button class="tab-button active" id="tabBtn-leadtime" onclick="showTab('leadtime')">📈 Czas realizacji</button>
+        <button class="tab-button" id="tabBtn-xmr" onclick="showTab('xmr')">📊 Tempo dostarczania (XmR)</button>
+    </div>
+
+    <div id="tab-leadtime" class="tab-panel active">
     <div class="stats-grid">
         <div class="stat-card"><div class="stat-label">Liczba danych</div><div class="stat-value" id="dataCount">0</div></div>
         <div class="stat-card"><div class="stat-label">Średni czas (dni)</div><div class="stat-value" id="avgTime">0</div></div>
@@ -409,6 +434,78 @@
             <button class="btn-primary" onclick="addNewDataPoint()">Dodaj punkt</button>
         </div>
     </div>
+    </div><!-- /tab-leadtime -->
+
+    <div id="tab-xmr" class="tab-panel">
+        <div class="xmr-intro">
+            <strong>Wykresy kontrolne XmR (Individuals &amp; Moving Range)</strong> — klasyczna metoda SPC do oceny stabilności tempa dostarczania (liczba elementów dostarczonych dziennie, dane: <em>Throughput Daily.xlsx</em>).
+            Wykres <b>X</b> pokazuje wartości indywidualne względem średniej (X̄) z granicami naturalnymi X̄ ± 2,66·MR̄.
+            Wykres <b>MR</b> pokazuje ruchomy rozstęp (różnicę między kolejnymi dniami) z górną granicą 3,27·MR̄ (dolna zawsze = 0).
+            Punkty poza granicami kontrolnymi (czerwone) sygnalizują przyczyny specjalne — sygnał, by zareagować i spróbować sterować procesem.
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-label">Średnia (X̄)</div><div class="stat-value" id="xmrMean">0</div></div>
+            <div class="stat-card"><div class="stat-label">Śr. ruchomy rozstęp (MR̄)</div><div class="stat-value" id="xmrMrMean">0</div></div>
+            <div class="stat-card"><div class="stat-label">Górna granica X (UCL)</div><div class="stat-value" id="xmrUclX">0</div></div>
+            <div class="stat-card"><div class="stat-label">Dolna granica X (LCL)</div><div class="stat-value" id="xmrLclX">0</div></div>
+            <div class="stat-card"><div class="stat-label">Górna granica MR (UCL)</div><div class="stat-value" id="xmrUclMr">0</div></div>
+        </div>
+
+        <div class="analysis-grid">
+            <div class="analysis-card">
+                <h3>🚦 Stabilność procesu (X)</h3>
+                <div class="big-value" id="xmrStabilityX">—</div>
+                <div class="sub-text" id="xmrStabilityXDetail">Brak wystarczających danych.</div>
+            </div>
+            <div class="analysis-card">
+                <h3>🚦 Stabilność zmienności (MR)</h3>
+                <div class="big-value" id="xmrStabilityMr">—</div>
+                <div class="sub-text" id="xmrStabilityMrDetail">Brak wystarczających danych.</div>
+            </div>
+        </div>
+
+        <div class="controls-section" style="grid-template-columns: 1fr;">
+            <div class="control-group">
+                <label class="title">Filtruj zakres dat (Throughput Daily):</label>
+                <div class="date-range-filter">
+                    <div class="input-group">
+                        <label for="xmrDateFrom">Od:</label>
+                        <input type="date" id="xmrDateFrom">
+                    </div>
+                    <div class="input-group">
+                        <label for="xmrDateTo">Do:</label>
+                        <input type="date" id="xmrDateTo">
+                    </div>
+                </div>
+                <button class="btn-secondary btn-small" onclick="clearXmrDateRange()" style="align-self:flex-start;">✕ Wyczyść zakres dat</button>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-title">Wykres X — wartości indywidualne (dostarczone elementy / dzień)</div>
+            <canvas id="xChart"></canvas>
+            <div class="percentile-legend">
+                <div class="percentile-line"><span class="dash trend-dash"></span>X̄ (średnia): <b id="xmrMeanLegend">0</b></div>
+                <div class="percentile-line"><span class="dash p85-dash"></span>UCL = X̄ + 2,66·MR̄: <b id="xmrUclXLegend">0</b></div>
+                <div class="percentile-line"><span class="dash p95-dash"></span>LCL = X̄ − 2,66·MR̄: <b id="xmrLclXLegend">0</b></div>
+            </div>
+            <div class="tooltip-hint">💡 Czerwone punkty leżą poza granicami kontrolnymi (przyczyna specjalna, nietypowy dzień).</div>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-title">Wykres MR — ruchomy rozstęp (|dzień N − dzień N-1|)</div>
+            <canvas id="mrChart"></canvas>
+            <div class="percentile-legend">
+                <div class="percentile-line"><span class="dash trend-dash"></span>MR̄ (średni rozstęp): <b id="xmrMrMeanLegend">0</b></div>
+                <div class="percentile-line"><span class="dash p95-dash"></span>UCL = 3,27·MR̄: <b id="xmrUclMrLegend">0</b></div>
+                <div class="percentile-line"><span class="dash p50-dash"></span>LCL = 0</div>
+            </div>
+            <div class="tooltip-hint">💡 Wykres MR pokazuje, o ile wartość w wykresie X zmieniła się względem poprzedniego dnia (np. 3, 1, 2, 7 dni różnicy).</div>
+        </div>
+
+        <div id="xmrSignalsContainer"></div>
+    </div><!-- /tab-xmr -->
 </div>
 
 <script>
@@ -453,6 +550,114 @@ const RAW_DATA = [
     {"date": "15 Listopada 2025", "size": "M", "leadTime": 75.0},
     {"date": "25 Listopada 2025", "size": "M", "leadTime": 89.0},
     {"date": "10 Grudnia 2025", "size": "S", "leadTime": 44.0}
+];
+
+// Dane dzienne z pliku "Throughput Daily.xlsx" (liczba elementów dostarczonych każdego dnia)
+const RAW_THROUGHPUT_DAILY = [
+    {"date": "2025-01-07", "value": 0.0},
+    {"date": "2025-01-08", "value": 2.0},
+    {"date": "2025-01-09", "value": 10.0},
+    {"date": "2025-01-10", "value": 3.0},
+    {"date": "2025-01-11", "value": 0.0},
+    {"date": "2025-01-12", "value": 0.0},
+    {"date": "2025-01-13", "value": 2.0},
+    {"date": "2025-01-14", "value": 3.0},
+    {"date": "2025-01-15", "value": 7.0},
+    {"date": "2025-01-16", "value": 0.0},
+    {"date": "2025-01-17", "value": 0.0},
+    {"date": "2025-01-18", "value": 0.0},
+    {"date": "2025-01-19", "value": 0.0},
+    {"date": "2025-01-20", "value": 5.0},
+    {"date": "2025-01-21", "value": 2.0},
+    {"date": "2025-01-22", "value": 0.0},
+    {"date": "2025-01-23", "value": 0.0},
+    {"date": "2025-01-24", "value": 0.0},
+    {"date": "2025-01-25", "value": 0.0},
+    {"date": "2025-01-26", "value": 0.0},
+    {"date": "2025-01-27", "value": 1.0},
+    {"date": "2025-01-28", "value": 1.0},
+    {"date": "2025-01-29", "value": 0.0},
+    {"date": "2025-01-30", "value": 5.0},
+    {"date": "2025-01-31", "value": 4.0},
+    {"date": "2025-02-01", "value": 0.0},
+    {"date": "2025-02-02", "value": 0.0},
+    {"date": "2025-02-03", "value": 7.0},
+    {"date": "2025-02-04", "value": 0.0},
+    {"date": "2025-02-05", "value": 2.0},
+    {"date": "2025-02-06", "value": 2.0},
+    {"date": "2025-02-07", "value": 12.0},
+    {"date": "2025-02-08", "value": 0.0},
+    {"date": "2025-02-09", "value": 0.0},
+    {"date": "2025-02-10", "value": 1.0},
+    {"date": "2025-02-11", "value": 0.0},
+    {"date": "2025-02-12", "value": 0.0},
+    {"date": "2025-02-13", "value": 2.0},
+    {"date": "2025-02-14", "value": 12.0},
+    {"date": "2025-02-15", "value": 0.0},
+    {"date": "2025-02-16", "value": 0.0},
+    {"date": "2025-02-17", "value": 1.0},
+    {"date": "2025-02-18", "value": 0.0},
+    {"date": "2025-02-19", "value": 0.0},
+    {"date": "2025-02-20", "value": 3.0},
+    {"date": "2025-02-21", "value": 11.0},
+    {"date": "2025-02-22", "value": 0.0},
+    {"date": "2025-02-23", "value": 0.0},
+    {"date": "2025-02-24", "value": 6.0},
+    {"date": "2025-02-25", "value": 0.0},
+    {"date": "2025-02-26", "value": 0.0},
+    {"date": "2025-02-27", "value": 6.0},
+    {"date": "2025-02-28", "value": 7.0},
+    {"date": "2025-03-01", "value": 0.0},
+    {"date": "2025-03-02", "value": 0.0},
+    {"date": "2025-03-03", "value": 2.0},
+    {"date": "2025-03-04", "value": 0.0},
+    {"date": "2025-03-05", "value": 0.0},
+    {"date": "2025-03-06", "value": 3.0},
+    {"date": "2025-03-07", "value": 5.0},
+    {"date": "2025-03-08", "value": 0.0},
+    {"date": "2025-03-09", "value": 0.0},
+    {"date": "2025-03-10", "value": 1.0},
+    {"date": "2025-03-11", "value": 0.0},
+    {"date": "2025-03-12", "value": 0.0},
+    {"date": "2025-03-13", "value": 9.0},
+    {"date": "2025-03-14", "value": 7.0},
+    {"date": "2025-03-15", "value": 0.0},
+    {"date": "2025-03-16", "value": 0.0},
+    {"date": "2025-03-17", "value": 3.0},
+    {"date": "2025-03-18", "value": 0.0},
+    {"date": "2025-03-19", "value": 0.0},
+    {"date": "2025-03-20", "value": 4.0},
+    {"date": "2025-03-21", "value": 10.0},
+    {"date": "2025-03-22", "value": 0.0},
+    {"date": "2025-03-23", "value": 0.0},
+    {"date": "2025-03-24", "value": 1.0},
+    {"date": "2025-03-25", "value": 0.0},
+    {"date": "2025-03-26", "value": 0.0},
+    {"date": "2025-03-27", "value": 5.0},
+    {"date": "2025-03-28", "value": 1.0},
+    {"date": "2025-03-29", "value": 0.0},
+    {"date": "2025-03-30", "value": 0.0},
+    {"date": "2025-03-31", "value": 2.0},
+    {"date": "2025-04-01", "value": 0.0},
+    {"date": "2025-04-02", "value": 0.0},
+    {"date": "2025-04-03", "value": 2.0},
+    {"date": "2025-04-04", "value": 11.0},
+    {"date": "2025-04-05", "value": 0.0},
+    {"date": "2025-04-06", "value": 0.0},
+    {"date": "2025-04-07", "value": 1.0},
+    {"date": "2025-04-08", "value": 0.0},
+    {"date": "2025-04-09", "value": 0.0},
+    {"date": "2025-04-10", "value": 5.0},
+    {"date": "2025-04-11", "value": 2.0},
+    {"date": "2025-04-12", "value": 0.0},
+    {"date": "2025-04-13", "value": 0.0},
+    {"date": "2025-04-14", "value": 1.0},
+    {"date": "2025-04-15", "value": 0.0},
+    {"date": "2025-04-16", "value": 0.0},
+    {"date": "2025-04-17", "value": 4.0},
+    {"date": "2025-04-18", "value": 7.0},
+    {"date": "2025-04-19", "value": 0.0}
+
 ];
 
 const sizeColors = { 'S': '#2980b9', 'M': '#e67e22', 'L': '#c0392b' };
@@ -1127,6 +1332,296 @@ document.getElementById('togglePerSizeTrend').addEventListener('change', renderA
 document.getElementById('filterDateFrom').addEventListener('change', renderAll);
 document.getElementById('filterDateTo').addEventListener('change', renderAll);
 document.getElementById('throughputGranularity').addEventListener('change', renderAll);
+
+// ============================================================
+// ===== ZAKŁADKA: Tempo dostarczania — wykresy XmR (SPC) =====
+// ============================================================
+
+function showTab(name) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    document.getElementById('tabBtn-' + name).classList.add('active');
+    if (name === 'xmr' && !xmrInitialized) {
+        initializeXmr();
+    }
+}
+
+let xmrInitialized = false;
+let xChart = null;
+let mrChart = null;
+let xmrAllPoints = [];
+
+function initializeXmr() {
+    xmrAllPoints = RAW_THROUGHPUT_DAILY.map((p, idx) => ({
+        id: idx,
+        dateLabel: p.date,
+        timestamp: new Date(p.date + 'T00:00:00').getTime(),
+        value: p.value
+    })).sort((a, b) => a.timestamp - b.timestamp);
+    xmrInitialized = true;
+    renderXmr();
+}
+
+function getXmrFilteredData() {
+    const fromVal = document.getElementById('xmrDateFrom').value;
+    const toVal = document.getElementById('xmrDateTo').value;
+    const from = fromVal ? new Date(fromVal + 'T00:00:00').getTime() : null;
+    const to = toVal ? new Date(toVal + 'T23:59:59').getTime() : null;
+    return xmrAllPoints.filter(p => {
+        if (from !== null && p.timestamp < from) return false;
+        if (to !== null && p.timestamp > to) return false;
+        return true;
+    }).sort((a, b) => a.timestamp - b.timestamp);
+}
+
+function clearXmrDateRange() {
+    document.getElementById('xmrDateFrom').value = '';
+    document.getElementById('xmrDateTo').value = '';
+    renderXmr();
+}
+
+// Oblicza statystyki XmR: średnią (X̄), średni ruchomy rozstęp (MR̄)
+// i granice kontrolne wg standardowych stałych dla wykresów indywidualnych (n=2):
+// UCL_X/LCL_X = X̄ ± 2.66·MR̄ ; UCL_MR = 3.27·MR̄ ; LCL_MR = 0
+function computeXmrStats(data) {
+    const n = data.length;
+    if (n < 2) return null;
+    const values = data.map(p => p.value);
+    const mean = values.reduce((a, b) => a + b, 0) / n;
+
+    const movingRanges = [];
+    for (let i = 1; i < n; i++) {
+        movingRanges.push({
+            ts: data[i].timestamp,
+            dateLabel: data[i].dateLabel,
+            mr: Math.abs(data[i].value - data[i - 1].value)
+        });
+    }
+    const mrMean = movingRanges.reduce((a, m) => a + m.mr, 0) / movingRanges.length;
+
+    const uclX = mean + 2.66 * mrMean;
+    const lclX = mean - 2.66 * mrMean;
+    const uclMr = 3.27 * mrMean;
+    const lclMr = 0;
+
+    return { mean, mrMean, uclX, lclX, uclMr, lclMr, movingRanges };
+}
+
+// Generyczny plugin Chart.js do rysowania poziomych linii odniesienia (średnia, UCL, LCL)
+const referenceLinesPlugin = {
+    id: 'referenceLines',
+    afterDatasetsDraw(c) {
+        const opts = (c.options.plugins && c.options.plugins.referenceLines) || {};
+        const { ctx, chartArea: { left, width }, scales: { y } } = c;
+        (opts.lines || []).forEach(line => {
+            if (!isFinite(line.value)) return;
+            const yPos = y.getPixelForValue(line.value);
+            ctx.save();
+            ctx.strokeStyle = line.color;
+            ctx.lineWidth = line.width || 2.5;
+            ctx.setLineDash(line.dash || [6, 5]);
+            ctx.beginPath();
+            ctx.moveTo(left, yPos);
+            ctx.lineTo(left + width, yPos);
+            ctx.stroke();
+            ctx.restore();
+        });
+    }
+};
+if (typeof Chart !== 'undefined' && Chart.register) Chart.register(referenceLinesPlugin);
+
+function renderXChart(data, stats) {
+    const ctx = document.getElementById('xChart').getContext('2d');
+    if (xChart) xChart.destroy();
+
+    const pointColors = data.map(p => (p.value > stats.uclX || p.value < stats.lclX) ? '#c0392b' : '#8e44ad');
+
+    xChart = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+            datasets: [
+                {
+                    label: 'Przepustowość dzienna',
+                    data: data.map(p => ({ x: p.timestamp, y: p.value, dateLabel: p.dateLabel })),
+                    showLine: true,
+                    borderColor: '#b9a7d6',
+                    borderWidth: 1.5,
+                    backgroundColor: pointColors,
+                    pointBackgroundColor: pointColors,
+                    pointBorderColor: pointColors,
+                    pointRadius: 4,
+                    pointHoverRadius: 7,
+                    tension: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => `${context.raw.dateLabel}: ${context.parsed.y} elem.`
+                    }
+                },
+                referenceLines: {
+                    lines: [
+                        { value: stats.mean, color: '#1e2a4a', dash: [], width: 3 },
+                        { value: stats.uclX, color: '#e67e22', dash: [6, 5] },
+                        { value: stats.lclX, color: '#c0392b', dash: [6, 5] }
+                    ]
+                }
+            },
+            scales: {
+                y: {
+                    title: { display: true, text: 'Elementy dostarczone / dzień', font: { weight: 'bold' } },
+                    beginAtZero: true
+                },
+                x: {
+                    type: 'linear',
+                    title: { display: true, text: 'Data', font: { weight: 'bold' } },
+                    ticks: { maxTicksLimit: 10, callback: (value) => formatShortDate(value) }
+                }
+            }
+        }
+    });
+}
+
+function renderMrChart(stats) {
+    const ctx = document.getElementById('mrChart').getContext('2d');
+    if (mrChart) mrChart.destroy();
+
+    const mrData = stats.movingRanges;
+    const barColors = mrData.map(m => m.mr > stats.uclMr ? '#c0392b' : '#8e44ad');
+
+    mrChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: mrData.map(m => formatShortDate(m.ts)),
+            datasets: [
+                {
+                    label: 'Ruchomy rozstęp (MR)',
+                    data: mrData.map(m => m.mr),
+                    backgroundColor: barColors,
+                    borderColor: barColors,
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => `MR: ${context.parsed.y.toFixed(1)}`
+                    }
+                },
+                referenceLines: {
+                    lines: [
+                        { value: stats.mrMean, color: '#1e2a4a', dash: [], width: 3 },
+                        { value: stats.uclMr, color: '#c0392b', dash: [6, 5] },
+                        { value: 0, color: '#1e8449', dash: [6, 5] }
+                    ]
+                }
+            },
+            scales: {
+                y: {
+                    title: { display: true, text: 'Ruchomy rozstęp (MR)', font: { weight: 'bold' } },
+                    beginAtZero: true
+                },
+                x: {
+                    ticks: { maxTicksLimit: 10, autoSkip: true }
+                }
+            }
+        }
+    });
+}
+
+function updateXmrStability(data, stats) {
+    const outOfLimitsX = data.filter(p => p.value > stats.uclX || p.value < stats.lclX);
+    const stabEl = document.getElementById('xmrStabilityX');
+    const stabDetailEl = document.getElementById('xmrStabilityXDetail');
+    if (outOfLimitsX.length === 0) {
+        stabEl.innerHTML = '✅ <span class="trend-down">Proces stabilny</span>';
+        stabDetailEl.textContent = `Wszystkie ${data.length} dni mieszczą się w granicach kontrolnych (X̄ ± 2,66·MR̄). Brak przyczyn specjalnych — tempo jest przewidywalne.`;
+    } else {
+        stabEl.innerHTML = `⚠️ <span class="trend-up">${outOfLimitsX.length} dni poza granicami</span>`;
+        stabDetailEl.textContent = `Wykryto ${outOfLimitsX.length} dni z wartością poza granicami kontrolnymi — to przyczyny specjalne (np. dni wolne, awarie, nietypowe wrzutki). Warto je zbadać indywidualnie.`;
+    }
+
+    const outOfLimitsMr = stats.movingRanges.filter(m => m.mr > stats.uclMr);
+    const mrStabEl = document.getElementById('xmrStabilityMr');
+    const mrStabDetailEl = document.getElementById('xmrStabilityMrDetail');
+    if (outOfLimitsMr.length === 0) {
+        mrStabEl.innerHTML = '✅ <span class="trend-down">Zmienność pod kontrolą</span>';
+        mrStabDetailEl.textContent = `Żadna zmiana dzień-do-dnia nie przekracza granicy 3,27·MR̄ — wahania tempa dostarczania mieszczą się w typowym zakresie.`;
+    } else {
+        mrStabEl.innerHTML = `⚠️ <span class="trend-up">${outOfLimitsMr.length} skoków powyżej UCL</span>`;
+        mrStabDetailEl.textContent = `${outOfLimitsMr.length} razy zmiana względem poprzedniego dnia przekroczyła granicę 3,27·MR̄ — oznacza to nagłe, nietypowe skoki tempa wymagające analizy przyczyny.`;
+    }
+}
+
+function updateXmrSignalsList(data, stats) {
+    const container = document.getElementById('xmrSignalsContainer');
+    const signalsX = data.filter(p => p.value > stats.uclX || p.value < stats.lclX)
+        .map(p => ({ date: p.dateLabel, text: `X = ${p.value} (${p.value > stats.uclX ? 'powyżej UCL' : 'poniżej LCL'})` }));
+    const signalsMr = stats.movingRanges.filter(m => m.mr > stats.uclMr)
+        .map(m => ({ date: m.dateLabel, text: `MR = ${m.mr.toFixed(1)} (powyżej UCL)` }));
+    const allSignals = signalsX.concat(signalsMr).sort((a, b) => a.date.localeCompare(b.date));
+
+    if (allSignals.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+    container.innerHTML = `
+        <div class="outliers-info">
+            <strong>🔍 Sygnały przyczyn specjalnych (${allSignals.length}):</strong>
+            ${allSignals.map(s => `
+                <div class="outlier-item">
+                    <span>${s.date} — ${s.text}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function renderXmr() {
+    const data = getXmrFilteredData();
+    if (data.length < 3) {
+        document.getElementById('xmrMean').textContent = '—';
+        document.getElementById('xmrMrMean').textContent = '—';
+        document.getElementById('xmrUclX').textContent = '—';
+        document.getElementById('xmrLclX').textContent = '—';
+        document.getElementById('xmrUclMr').textContent = '—';
+        return;
+    }
+
+    const stats = computeXmrStats(data);
+
+    document.getElementById('xmrMean').textContent = stats.mean.toFixed(1);
+    document.getElementById('xmrMrMean').textContent = stats.mrMean.toFixed(1);
+    document.getElementById('xmrUclX').textContent = stats.uclX.toFixed(1);
+    document.getElementById('xmrLclX').textContent = Math.max(0, stats.lclX).toFixed(1);
+    document.getElementById('xmrUclMr').textContent = stats.uclMr.toFixed(1);
+
+    document.getElementById('xmrMeanLegend').textContent = stats.mean.toFixed(1);
+    document.getElementById('xmrUclXLegend').textContent = stats.uclX.toFixed(1);
+    document.getElementById('xmrLclXLegend').textContent = stats.lclX.toFixed(1);
+    document.getElementById('xmrMrMeanLegend').textContent = stats.mrMean.toFixed(1);
+    document.getElementById('xmrUclMrLegend').textContent = stats.uclMr.toFixed(1);
+
+    renderXChart(data, stats);
+    renderMrChart(stats);
+    updateXmrStability(data, stats);
+    updateXmrSignalsList(data, stats);
+}
+
+document.getElementById('xmrDateFrom').addEventListener('change', renderXmr);
+document.getElementById('xmrDateTo').addEventListener('change', renderXmr);
 
 window.addEventListener('load', initializeData);
 </script>
