@@ -154,6 +154,13 @@
 
     .size-filter { display: flex; gap: 10px; flex-wrap: wrap; }
 
+    .date-range-filter { display: flex; gap: 12px; flex-wrap: wrap; }
+    .date-range-filter .input-group { flex: 1; min-width: 130px; }
+    .date-range-filter input {
+        padding: 8px 10px; border: 2px solid #ddd; border-radius: 6px; font-size: 0.9em; width: 100%;
+    }
+    .date-range-filter input:focus { outline: none; border-color: #3a3f7d; }
+
     .size-checkbox {
         display: flex; align-items: center; gap: 7px; cursor: pointer;
         padding: 7px 12px; border: 2px solid #ddd; border-radius: 6px; transition: all 0.2s;
@@ -238,6 +245,24 @@
     }
     .input-group input:focus, .input-group select:focus { outline: none; border-color: #3a3f7d; }
 
+    /* ===== Throughput (tempo dostarczania) ===== */
+    .throughput-header {
+        display: flex; justify-content: space-between; align-items: center;
+        flex-wrap: wrap; gap: 12px; margin-bottom: 12px;
+    }
+    .granularity-select {
+        display: flex; align-items: center; gap: 8px; font-size: 0.9em; font-weight: 600; color: #1e2a4a;
+    }
+    .granularity-select select {
+        padding: 7px 10px; border: 2px solid #ddd; border-radius: 6px; font-size: 0.9em; cursor: pointer;
+    }
+    .granularity-select select:focus { outline: none; border-color: #3a3f7d; }
+    .throughput-summary {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px; margin-top: 16px;
+    }
+    .throughput-summary .analysis-card { border-left-color: #8e44ad; }
+
     @media (max-width: 768px) {
         .container { padding: 16px; }
         .header h1 { font-size: 1.6em; }
@@ -249,7 +274,7 @@
 <div class="container">
     <div class="header">
         <h1>📊 Dashboard Czasu Realizacji — Analiza Trendów</h1>
-        <p>Scatterplot w czasie, prognozy percentylowe oraz analiza zależności czasu realizacji od rozmiaru zadania</p>
+        <p>Scatterplot w czasie, prognozy percentylowe, analiza zależności czasu realizacji od rozmiaru oraz tempa dostarczania — z filtrem zakresu dat</p>
     </div>
 
     <div class="stats-grid">
@@ -295,6 +320,21 @@
         </div>
 
         <div class="control-group">
+            <label class="title">Filtruj po dacie ukończenia:</label>
+            <div class="date-range-filter">
+                <div class="input-group">
+                    <label for="filterDateFrom">Od:</label>
+                    <input type="date" id="filterDateFrom">
+                </div>
+                <div class="input-group">
+                    <label for="filterDateTo">Do:</label>
+                    <input type="date" id="filterDateTo">
+                </div>
+            </div>
+            <button class="btn-secondary btn-small" onclick="clearDateRange()" style="align-self:flex-start;">✕ Wyczyść zakres dat</button>
+        </div>
+
+        <div class="control-group">
             <label class="title">Akcje:</label>
             <div class="button-group">
                 <button class="btn-secondary" onclick="resetFilters()">↺ Reset filtry</button>
@@ -317,6 +357,35 @@
     </div>
 
     <div id="outliersContainer"></div>
+
+    <div class="chart-container">
+        <div class="throughput-header">
+            <div class="chart-title" style="margin-bottom:0;">🚀 Tempo dostarczania (przepustowość w czasie)</div>
+            <div class="granularity-select">
+                <label for="throughputGranularity">Grupuj po:</label>
+                <select id="throughputGranularity">
+                    <option value="week">Tydzień</option>
+                    <option value="month" selected>Miesiąc</option>
+                    <option value="quarter">Kwartał</option>
+                </select>
+            </div>
+        </div>
+        <canvas id="throughputChart"></canvas>
+        <div class="tooltip-hint">💡 Słupki = liczba dostarczonych elementów w okresie, linia = średni czas realizacji w tym okresie. Zmień grupowanie, aby sterować poziomem szczegółowości analizy tempa.</div>
+
+        <div class="throughput-summary">
+            <div class="analysis-card">
+                <h3>⚙️ Kierunek tempa dostarczania</h3>
+                <div class="big-value" id="throughputDirection">—</div>
+                <div class="sub-text" id="throughputDetail">Brak wystarczających danych.</div>
+            </div>
+            <div class="analysis-card">
+                <h3>🧭 Tempo vs. czas realizacji</h3>
+                <div class="big-value" id="throughputVsLeadTime">—</div>
+                <div class="sub-text" id="throughputVsLeadTimeDetail">Brak wystarczających danych.</div>
+            </div>
+        </div>
+    </div>
 
     <div class="data-input-section">
         <h3>➕ Dodaj nowy punkt danych</h3>
@@ -427,10 +496,29 @@ function getSelectedSizes() {
     return Array.from(document.querySelectorAll('.size-filter-checkbox:checked')).map(cb => cb.value);
 }
 
+function getDateRange() {
+    const fromVal = document.getElementById('filterDateFrom').value;
+    const toVal = document.getElementById('filterDateTo').value;
+    const from = fromVal ? new Date(fromVal + 'T00:00:00').getTime() : null;
+    const to = toVal ? new Date(toVal + 'T23:59:59').getTime() : null;
+    return { from, to };
+}
+
 function getFilteredData() {
     const selectedSizes = getSelectedSizes();
-    return allPoints.filter(p => !p.hidden && selectedSizes.includes(p.size))
-                     .sort((a, b) => a.timestamp - b.timestamp);
+    const { from, to } = getDateRange();
+    return allPoints.filter(p => {
+        if (p.hidden || !selectedSizes.includes(p.size)) return false;
+        if (from !== null && p.timestamp < from) return false;
+        if (to !== null && p.timestamp > to) return false;
+        return true;
+    }).sort((a, b) => a.timestamp - b.timestamp);
+}
+
+function clearDateRange() {
+    document.getElementById('filterDateFrom').value = '';
+    document.getElementById('filterDateTo').value = '';
+    renderAll();
 }
 
 function calculatePercentile(values, percentile) {
@@ -499,6 +587,7 @@ function renderAll() {
     updateCorrelationAnalysis(filteredData);
     updateSizeStatsTable(filteredData);
     updateOutliersDisplay();
+    updateThroughput(filteredData);
 }
 
 function buildTrendDatasets(filteredData, baseTimestamp) {
@@ -842,11 +931,164 @@ function updateStats(filteredData) {
     document.getElementById('maxTime').textContent = leadTimes.length > 0 ? Math.max(...leadTimes) : 0;
 }
 
+let throughputChart = null;
+
+function getPeriodKey(ts, granularity) {
+    const d = new Date(ts);
+    if (granularity === 'week') {
+        const dow = (d.getDay() + 6) % 7; // Poniedziałek = 0
+        const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow);
+        return monday.getTime();
+    } else if (granularity === 'quarter') {
+        const q = Math.floor(d.getMonth() / 3);
+        return new Date(d.getFullYear(), q * 3, 1).getTime();
+    }
+    return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); // month (domyślnie)
+}
+
+function formatPeriodLabel(ts, granularity) {
+    const d = new Date(ts);
+    if (granularity === 'week') return `${d.getDate()} ${MONTH_SHORT[d.getMonth()]}`;
+    if (granularity === 'quarter') return `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`;
+    return `${MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function computeThroughput(filteredData, granularity) {
+    const buckets = {};
+    filteredData.forEach(p => {
+        const key = getPeriodKey(p.timestamp, granularity);
+        if (!buckets[key]) buckets[key] = [];
+        buckets[key].push(p.leadTime);
+    });
+    return Object.keys(buckets).map(Number).sort((a, b) => a - b).map(key => {
+        const values = buckets[key];
+        return {
+            ts: key,
+            label: formatPeriodLabel(key, granularity),
+            count: values.length,
+            avgLeadTime: values.reduce((a, b) => a + b, 0) / values.length
+        };
+    });
+}
+
+function updateThroughput(filteredData) {
+    const granularity = document.getElementById('throughputGranularity').value;
+    const periods = computeThroughput(filteredData, granularity);
+
+    const ctx = document.getElementById('throughputChart').getContext('2d');
+    if (throughputChart) throughputChart.destroy();
+
+    throughputChart = new Chart(ctx, {
+        data: {
+            labels: periods.map(p => p.label),
+            datasets: [
+                {
+                    type: 'bar',
+                    label: 'Dostarczone elementy',
+                    data: periods.map(p => p.count),
+                    backgroundColor: 'rgba(142, 68, 173, 0.55)',
+                    borderColor: '#8e44ad',
+                    borderWidth: 1,
+                    yAxisID: 'yCount',
+                    order: 2
+                },
+                {
+                    type: 'line',
+                    label: 'Śr. czas realizacji (dni)',
+                    data: periods.map(p => p.avgLeadTime),
+                    borderColor: '#1e2a4a',
+                    backgroundColor: '#1e2a4a',
+                    borderWidth: 2.5,
+                    pointRadius: 4,
+                    tension: 0.25,
+                    yAxisID: 'yLeadTime',
+                    order: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: true, position: 'top', labels: { usePointStyle: true, font: { size: 12, weight: 'bold' } } }
+            },
+            scales: {
+                yCount: {
+                    position: 'left',
+                    beginAtZero: true,
+                    title: { display: true, text: 'Liczba elementów', font: { weight: 'bold' } },
+                    ticks: { precision: 0 }
+                },
+                yLeadTime: {
+                    position: 'right',
+                    beginAtZero: true,
+                    grid: { drawOnChartArea: false },
+                    title: { display: true, text: 'Śr. czas realizacji (dni)', font: { weight: 'bold' } }
+                }
+            }
+        }
+    });
+
+    updateThroughputAnalysis(periods, granularity);
+}
+
+function updateThroughputAnalysis(periods, granularity) {
+    const dirEl = document.getElementById('throughputDirection');
+    const detailEl = document.getElementById('throughputDetail');
+    const vsEl = document.getElementById('throughputVsLeadTime');
+    const vsDetailEl = document.getElementById('throughputVsLeadTimeDetail');
+    const unitLabel = granularity === 'week' ? 'tydzień' : granularity === 'quarter' ? 'kwartał' : 'miesiąc';
+
+    if (periods.length < 3) {
+        dirEl.innerHTML = '—';
+        detailEl.textContent = `Za mało okresów (min. 3) do oceny tempa dostarczania przy grupowaniu: ${unitLabel}.`;
+        vsEl.innerHTML = '—';
+        vsDetailEl.textContent = 'Brak wystarczających danych.';
+        return;
+    }
+
+    const regPoints = periods.map((p, idx) => ({ x: idx, y: p.count }));
+    const reg = linearRegression(regPoints);
+    const avgCount = periods.reduce((a, p) => a + p.count, 0) / periods.length;
+
+    if (reg) {
+        const threshold = 0.05;
+        let label, css, arrow;
+        if (reg.slope > threshold) { label = 'Przyspiesza'; css = 'trend-down'; arrow = '📈'; }
+        else if (reg.slope < -threshold) { label = 'Zwalnia'; css = 'trend-up'; arrow = '📉'; }
+        else { label = 'Stabilne'; css = 'trend-flat'; arrow = '➡️'; }
+
+        dirEl.innerHTML = `${arrow} <span class="${css}">${label}</span>`;
+        detailEl.innerHTML = `Średnio <b>${avgCount.toFixed(1)} elem./${unitLabel}</b>. ` +
+            `Zmiana tempa ok. <b>${reg.slope >= 0 ? '+' : ''}${reg.slope.toFixed(2)} elem./${unitLabel}</b> okres do okresu ` +
+            `(R² = ${(reg.r2 * 100).toFixed(0)}%). Zmień grupowanie powyżej, aby doprecyzować obraz tempa.`;
+    }
+
+    // Czy wyższe tempo (więcej dostarczeń w okresie) wiąże się z dłuższym/krótszym czasem realizacji?
+    const counts = periods.map(p => p.count);
+    const avgLeadTimes = periods.map(p => p.avgLeadTime);
+    const r = pearsonCorrelation(counts, avgLeadTimes);
+    const strength = correlationStrength(r);
+    vsEl.innerHTML = `r = ${r.toFixed(2)} <span class="badge ${strength.css}">${strength.label}</span>`;
+
+    if (Math.abs(r) < 0.2) {
+        vsDetailEl.textContent = `Tempo dostarczania (liczba elementów/${unitLabel}) nie ma wyraźnego związku ze średnim czasem realizacji — można zwiększać przepustowość bez obaw o automatyczne wydłużenie czasu.`;
+    } else if (r > 0) {
+        vsDetailEl.textContent = `W okresach o większej liczbie dostarczonych elementów czas realizacji bywa dłuższy — sygnał możliwego przeciążenia zespołu przy wyższym tempie.`;
+    } else {
+        vsDetailEl.textContent = `W okresach o większej liczbie dostarczonych elementów czas realizacji bywa krótszy — może wskazywać na lepszy przepływ pracy przy wyższej przepustowości.`;
+    }
+}
+
 function resetFilters() {
     document.querySelectorAll('.size-filter-checkbox').forEach(cb => cb.checked = true);
     allPoints.forEach(p => p.hidden = false);
     document.getElementById('toggleTrendLine').checked = true;
     document.getElementById('togglePerSizeTrend').checked = false;
+    document.getElementById('filterDateFrom').value = '';
+    document.getElementById('filterDateTo').value = '';
+    document.getElementById('throughputGranularity').value = 'month';
     renderAll();
 }
 
@@ -882,6 +1124,9 @@ function addNewDataPoint() {
 document.querySelectorAll('.size-filter-checkbox').forEach(cb => cb.addEventListener('change', renderAll));
 document.getElementById('toggleTrendLine').addEventListener('change', renderAll);
 document.getElementById('togglePerSizeTrend').addEventListener('change', renderAll);
+document.getElementById('filterDateFrom').addEventListener('change', renderAll);
+document.getElementById('filterDateTo').addEventListener('change', renderAll);
+document.getElementById('throughputGranularity').addEventListener('change', renderAll);
 
 window.addEventListener('load', initializeData);
 </script>
