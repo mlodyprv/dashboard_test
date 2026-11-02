@@ -1,1 +1,667 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Czasu Realizacji</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 30px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 20px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .controls-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: #333;
+            font-size: 0.95em;
+        }
+
+        .size-filter {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .size-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 8px 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            transition: all 0.3s;
+        }
+
+        .size-checkbox:hover {
+            border-color: #667eea;
+        }
+
+        .size-checkbox input {
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
+            margin: 0;
+        }
+
+        .size-checkbox.S { border-color: #3498db; }
+        .size-checkbox.M { border-color: #f39c12; }
+        .size-checkbox.L { border-color: #e74c3c; }
+
+        .size-checkbox.S input:checked { accent-color: #3498db; }
+        .size-checkbox.M input:checked { accent-color: #f39c12; }
+        .size-checkbox.L input:checked { accent-color: #e74c3c; }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.95em;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #e8e8e8;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #d0d0d0;
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #229954;
+            transform: translateY(-2px);
+        }
+
+        .chart-container {
+            position: relative;
+            margin-bottom: 40px;
+            background: #fafafa;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-container canvas {
+            max-height: 500px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        .data-input-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+            border: 2px dashed #667eea;
+        }
+
+        .data-input-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        .input-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+            align-items: end;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .input-group label {
+            font-weight: 600;
+            color: #333;
+            font-size: 0.9em;
+        }
+
+        .input-group input,
+        .input-group select {
+            padding: 10px 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.95em;
+        }
+
+        .input-group input:focus,
+        .input-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .outliers-info {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            color: #333;
+        }
+
+        .outlier-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #ffe69c;
+        }
+
+        .outlier-item:last-child {
+            border-bottom: none;
+        }
+
+        .btn-small {
+            padding: 5px 10px;
+            font-size: 0.85em;
+        }
+
+        .percentile-legend {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+        }
+
+        .percentile-line {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 8px 0;
+            font-weight: 500;
+        }
+
+        .p50-line {
+            border-left: 3px solid #27ae60;
+            padding-left: 10px;
+        }
+
+        .p85-line {
+            border-left: 3px solid #f39c12;
+            padding-left: 10px;
+        }
+
+        .p95-line {
+            border-left: 3px solid #e74c3c;
+            padding-left: 10px;
+        }
+
+        .tooltip-hint {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .controls-section {
+                grid-template-columns: 1fr;
+            }
+
+            .chart-container canvas {
+                max-height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Dashboard Czasu Realizacji</h1>
+            <p>Analiza trendów czasu realizacji wg rozmiaru elementów</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Liczba danych</div>
+                <div class="stat-value" id="dataCount">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Średni czas (dni)</div>
+                <div class="stat-value" id="avgTime">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Min czas (dni)</div>
+                <div class="stat-value" id="minTime">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Max czas (dni)</div>
+                <div class="stat-value" id="maxTime">0</div>
+            </div>
+        </div>
+
+        <div class="controls-section">
+            <div class="control-group">
+                <label>Filtruj po rozmiarze:</label>
+                <div class="size-filter">
+                    <label class="size-checkbox S">
+                        <input type="checkbox" value="S" class="size-filter-checkbox" checked> Rozmiar S
+                    </label>
+                    <label class="size-checkbox M">
+                        <input type="checkbox" value="M" class="size-filter-checkbox" checked> Rozmiar M
+                    </label>
+                    <label class="size-checkbox L">
+                        <input type="checkbox" value="L" class="size-filter-checkbox" checked> Rozmiar L
+                    </label>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn-secondary" onclick="resetFilters()">↺ Reset filtry</button>
+                <button class="btn-danger" onclick="removeAllOutliers()">Usuń wszystkie outliers</button>
+                <button class="btn-success" onclick="restoreAllOutliers()">Przywróć outliers</button>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="scatterChart"></canvas>
+            <div class="percentile-legend">
+                <div class="p50-line">
+                    P50 (Mediana): <span id="p50Value">0</span> dni
+                </div>
+                <div class="p85-line">
+                    P85 (Prognoza): <span id="p85Value">0</span> dni
+                </div>
+                <div class="p95-line">
+                    P95 (Prognoza): <span id="p95Value">0</span> dni
+                </div>
+                <div class="tooltip-hint">💡 Outliers: Kliknij na punkt, aby go usunąć. Pojawią się poniżej.</div>
+            </div>
+        </div>
+
+        <div id="outliersContainer"></div>
+
+        <div class="data-input-section">
+            <h3>➕ Dodaj nowy punkt danych</h3>
+            <div class="input-row">
+                <div class="input-group">
+                    <label for="newSize">Rozmiar:</label>
+                    <select id="newSize">
+                        <option value="S">Rozmiar S</option>
+                        <option value="M">Rozmiar M</option>
+                        <option value="L">Rozmiar L</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="newLeadTime">Czas realizacji (dni):</label>
+                    <input type="number" id="newLeadTime" min="0" max="10000" placeholder="np. 50">
+                </div>
+                <div class="input-group">
+                    <label for="newDate">Data ukończenia:</label>
+                    <input type="date" id="newDate">
+                </div>
+                <button class="btn-primary" onclick="addNewDataPoint()">Dodaj punkt</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let originalData = [];
+        let hiddenOutliers = [];
+        let chart = null;
+        let allPoints = [];
+        let percentilePlugin = null;
+
+        const DATA = [
+            {"date": "15 Lipca 2024", "size": "S", "leadTime": 49.0},
+            {"date": "22 Sierpnia 2024", "size": "S", "leadTime": 48.0},
+            {"date": "10 Września 2024", "size": "S", "leadTime": 87.0},
+            {"date": "25 Września 2024", "size": "M", "leadTime": 57.0},
+            {"date": "5 Października 2024", "size": "M", "leadTime": 148.0},
+            {"date": "14 Października 2024", "size": "S", "leadTime": 53.0},
+            {"date": "28 Października 2024", "size": "S", "leadTime": 45.0},
+            {"date": "18 Listopada 2024", "size": "M", "leadTime": 145.0},
+            {"date": "4 Grudnia 2024", "size": "L", "leadTime": 105.0},
+            {"date": "8 Stycznia 2025", "size": "S", "leadTime": 5.0},
+            {"date": "20 Stycznia 2025", "size": "L", "leadTime": 163.0},
+            {"date": "14 Lutego 2025", "size": "S", "leadTime": 43.0},
+            {"date": "26 Lutego 2025", "size": "M", "leadTime": 415.0},
+            {"date": "15 Marca 2025", "size": "L", "leadTime": 123.0},
+            {"date": "10 Kwietnia 2025", "size": "M", "leadTime": 103.0},
+            {"date": "5 Maja 2025", "size": "L", "leadTime": 104.0},
+            {"date": "12 Czerwca 2025", "size": "L", "leadTime": 302.0},
+            {"date": "25 Czerwca 2025", "size": "L", "leadTime": 158.0},
+            {"date": "2 Lipca 2025", "size": "L", "leadTime": 98.0},
+            {"date": "11 Lipca 2025", "size": "S", "leadTime": 52.0},
+            {"date": "18 Lipca 2025", "size": "M", "leadTime": 95.0},
+            {"date": "29 Lipca 2025", "size": "S", "leadTime": 70.0},
+            {"date": "3 Sierpnia 2025", "size": "M", "leadTime": 95.0},
+            {"date": "14 Sierpnia 2025", "size": "M", "leadTime": 101.0},
+            {"date": "21 Sierpnia 2025", "size": "M", "leadTime": 57.0},
+            {"date": "29 Sierpnia 2025", "size": "M", "leadTime": 57.0},
+            {"date": "8 Września 2025", "size": "S", "leadTime": 53.0},
+            {"date": "22 Września 2025", "size": "L", "leadTime": 137.0},
+            {"date": "4 Października 2025", "size": "S", "leadTime": 73.0},
+            {"date": "12 Października 2025", "size": "M", "leadTime": 60.0},
+            {"date": "19 Października 2025", "size": "S", "leadTime": 126.0},
+            {"date": "27 Października 2025", "size": "M", "leadTime": 57.0},
+            {"date": "5 Listopada 2025", "size": "L", "leadTime": 124.0},
+            {"date": "15 Listopada 2025", "size": "M", "leadTime": 75.0},
+            {"date": "25 Listopada 2025", "size": "M", "leadTime": 89.0},
+            {"date": "10 Grudnia 2025", "size": "S", "leadTime": 44.0}
+        ];
+
+        const sizeColors = {'S': '#3498db', 'M': '#f39c12', 'L': '#e74c3c'};
+
+        function initializeData() {
+            originalData = JSON.parse(JSON.stringify(DATA));
+            allPoints = DATA.map((p, idx) => ({...p, id: idx, hidden: false}));
+            updateChart();
+            updateStats();
+        }
+
+        function getSelectedSizes() {
+            return Array.from(document.querySelectorAll('.size-filter-checkbox:checked')).map(cb => cb.value);
+        }
+
+        function getFilteredData() {
+            const selectedSizes = getSelectedSizes();
+            return allPoints.filter(p => !p.hidden && selectedSizes.includes(p.size));
+        }
+
+        function calculatePercentile(values, percentile) {
+            if (values.length === 0) return 0;
+            const sorted = values.slice().sort((a, b) => a - b);
+            const index = (percentile / 100) * (sorted.length - 1);
+            const lower = Math.floor(index);
+            const upper = Math.ceil(index);
+            const weight = index % 1;
+            if (lower === upper) return sorted[lower];
+            return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+        }
+
+        function updateChart() {
+            const filteredData = getFilteredData();
+            const datasets = [];
+            let pointIndex = 0;
+            ['S', 'M', 'L'].forEach(size => {
+                const sizeData = filteredData.filter(p => p.size === size);
+                datasets.push({
+                    label: `Rozmiar ${size}`,
+                    data: sizeData.map((p, idx) => ({x: pointIndex++, y: p.leadTime, id: p.id, date: p.date})),
+                    backgroundColor: sizeColors[size],
+                    borderColor: sizeColors[size],
+                    borderWidth: 2,
+                    pointRadius: 6,
+                    pointHoverRadius: 8,
+                    showLine: false
+                });
+            });
+
+            const allLeadTimes = filteredData.map(p => p.leadTime);
+            const p50 = calculatePercentile(allLeadTimes, 50);
+            const p85 = calculatePercentile(allLeadTimes, 85);
+            const p95 = calculatePercentile(allLeadTimes, 95);
+
+            const ctx = document.getElementById('scatterChart').getContext('2d');
+            if (chart) chart.destroy();
+
+            percentilePlugin = {
+                id: 'percentileLines',
+                afterDatasetsDraw(c) {
+                    const {ctx, chartArea: {left, width}, scales: {y}} = c;
+                    const drawLine = (val, color) => {
+                        const yPos = y.getPixelForValue(val);
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = 3;
+                        ctx.setLineDash([5, 5]);
+                        ctx.beginPath();
+                        ctx.moveTo(left, yPos);
+                        ctx.lineTo(left + width, yPos);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    };
+                    drawLine(p50, '#27ae60');
+                    drawLine(p85, '#f39c12');
+                    drawLine(p95, '#e74c3c');
+                }
+            };
+
+            Chart.register(percentilePlugin);
+            chart = new Chart(ctx, {
+                type: 'scatter',
+                data: {datasets},
+                options: {
+                    responsive: true,
+                    plugins: {
+                        percentileLines: {},
+                        legend: {display: true, position: 'top'},
+                        tooltip: {callbacks: {label: (c) => `Czas: ${c.parsed.y} dni | Data: ${c.raw.date}`}}
+                    },
+                    scales: {
+                        y: {beginAtZero: true, ticks: {callback: v => v + ' dni'}},
+                        x: {display: true}
+                    },
+                    onClick: (e, elements) => {
+                        if (elements.length > 0) {
+                            const id = datasets[elements[0].datasetIndex].data[elements[0].index].id;
+                            hideOutlier(id);
+                        }
+                    }
+                }
+            });
+
+            document.getElementById('p50Value').textContent = p50.toFixed(1);
+            document.getElementById('p85Value').textContent = p85.toFixed(1);
+            document.getElementById('p95Value').textContent = p95.toFixed(1);
+        }
+
+        function hideOutlier(id) {
+            const point = allPoints.find(p => p.id === id);
+            if (point && !point.hidden) {
+                point.hidden = true;
+                hiddenOutliers.push(id);
+                updateChart();
+                updateStats();
+                updateOutliersDisplay();
+            }
+        }
+
+        function restoreOutlier(id) {
+            const point = allPoints.find(p => p.id === id);
+            if (point && point.hidden) {
+                point.hidden = false;
+                hiddenOutliers = hiddenOutliers.filter(x => x !== id);
+                updateChart();
+                updateStats();
+                updateOutliersDisplay();
+            }
+        }
+
+        function removeAllOutliers() {
+            allPoints.filter(p => !p.hidden).forEach(p => p.hidden = true);
+            hiddenOutliers = allPoints.map(p => p.id);
+            updateChart();
+            updateStats();
+            updateOutliersDisplay();
+        }
+
+        function restoreAllOutliers() {
+            allPoints.forEach(p => p.hidden = false);
+            hiddenOutliers = [];
+            updateChart();
+            updateStats();
+            updateOutliersDisplay();
+        }
+
+        function updateOutliersDisplay() {
+            const container = document.getElementById('outliersContainer');
+            const hidden = allPoints.filter(p => p.hidden);
+            if (hidden.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+            container.innerHTML = `<div class="outliers-info"><strong>🔍 Ukryte elementy (${hidden.length}):</strong>${hidden.map(p => `<div class="outlier-item"><span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${sizeColors[p.size]};margin-right:8px;"></span>${p.date} - ${p.size}: <strong>${p.leadTime}</strong> dni</span><button class="btn-small btn-success" onclick="restoreOutlier(${p.id})">Przywróć</button></div>`).join('')}</div>`;
+        }
+
+        function updateStats() {
+            const filteredData = getFilteredData();
+            const leadTimes = filteredData.map(p => p.leadTime);
+            document.getElementById('dataCount').textContent = filteredData.length;
+            document.getElementById('avgTime').textContent = leadTimes.length > 0 ? (leadTimes.reduce((a, b) => a + b) / leadTimes.length).toFixed(1) : 0;
+            document.getElementById('minTime').textContent = leadTimes.length > 0 ? Math.min(...leadTimes) : 0;
+            document.getElementById('maxTime').textContent = leadTimes.length > 0 ? Math.max(...leadTimes) : 0;
+        }
+
+        function resetFilters() {
+            document.querySelectorAll('.size-filter-checkbox').forEach(cb => cb.checked = true);
+            allPoints.forEach(p => p.hidden = false);
+            hiddenOutliers = [];
+            updateChart();
+            updateStats();
+            updateOutliersDisplay();
+        }
+
+        function addNewDataPoint() {
+            const size = document.getElementById('newSize').value;
+            const leadTime = parseFloat(document.getElementById('newLeadTime').value);
+            const date = document.getElementById('newDate').value;
+            if (!size || !leadTime || !date || isNaN(leadTime)) {
+                alert('Proszę wypełnić wszystkie pola');
+                return;
+            }
+            const formattedDate = new Date(date).toLocaleDateString('pl-PL', {day: 'numeric', month: 'long', year: 'numeric'});
+            allPoints.push({date: formattedDate, size, leadTime, id: Math.max(...allPoints.map(p => p.id), -1) + 1, hidden: false});
+            document.getElementById('newSize').value = 'S';
+            document.getElementById('newLeadTime').value = '';
+            document.getElementById('newDate').value = '';
+            updateChart();
+            updateStats();
+            alert('✅ Punkt danych dodany pomyślnie!');
+        }
+
+        document.querySelectorAll('.size-filter-checkbox').forEach(cb => cb.addEventListener('change', () => {
+            updateChart();
+            updateStats();
+        }));
+
+        window.addEventListener('load', initializeData);
+    </script>
+</body>
+</html>
