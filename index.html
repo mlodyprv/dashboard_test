@@ -473,7 +473,7 @@
             </div>
         </div>
 
-        <div class="controls-section" style="grid-template-columns: 1fr 1fr;">
+        <div class="controls-section" style="grid-template-columns: 1fr;">
             <div class="control-group">
                 <label class="title">Filtruj zakres dat (Throughput Daily):</label>
                 <div class="date-range-filter">
@@ -487,14 +487,6 @@
                     </div>
                 </div>
                 <button class="btn-secondary btn-small" onclick="clearXmrDateRange()" style="align-self:flex-start;">✕ Wyczyść zakres dat</button>
-            </div>
-            <div class="control-group">
-                <label class="title" for="xmrGranularity">Agregacja osi czasu:</label>
-                <select id="xmrGranularity">
-                    <option value="daily">Dziennie (surowe dane)</option>
-                    <option value="weekly" selected>Tygodniowo (od 7 stycznia 2025)</option>
-                </select>
-                <div class="sub-text" style="margin-top:6px;">Tygodnie liczone są jako 7-dniowe okresy zaczynające się od 2025-01-07 (suma elementów dostarczonych w tygodniu).</div>
             </div>
         </div>
 
@@ -1369,55 +1361,12 @@ function initializeXmr() {
     renderXmr();
 }
 
-// Punkt startowy agregacji tygodniowej: 2025-01-07 (pierwszy dzień danych Throughput Daily).
-// Tygodnie to kolejne 7-dniowe okresy liczone od tej daty (bez zależności od dni tygodnia kalendarza).
-const XMR_WEEK_ANCHOR_TS = new Date('2025-01-07T00:00:00').getTime();
-const XMR_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-
-// Agreguje dzienne punkty do tygodniowych "kubełków" (suma wartości w tygodniu).
-// Zwraca punkty z timestampem = początek tygodnia i czytelną etykietą zakresu dat.
-function aggregateXmrWeekly(points) {
-    const buckets = new Map();
-    points.forEach(p => {
-        const weekIndex = Math.floor((p.timestamp - XMR_WEEK_ANCHOR_TS) / XMR_WEEK_MS);
-        if (!buckets.has(weekIndex)) {
-            const startTs = XMR_WEEK_ANCHOR_TS + weekIndex * XMR_WEEK_MS;
-            buckets.set(weekIndex, { weekIndex, startTs, endTs: startTs + XMR_WEEK_MS - 1, sum: 0, count: 0 });
-        }
-        const b = buckets.get(weekIndex);
-        b.sum += p.value;
-        b.count += 1;
-    });
-    return Array.from(buckets.values())
-        .sort((a, b) => a.weekIndex - b.weekIndex)
-        .map(b => {
-            const startDate = new Date(b.startTs);
-            const endDate = new Date(Math.min(b.endTs, xmrAllPoints[xmrAllPoints.length - 1].timestamp));
-            const label = `${formatShortDate(startDate.getTime())} – ${formatShortDate(endDate.getTime())}`;
-            return {
-                id: `w${b.weekIndex}`,
-                dateLabel: label,
-                timestamp: b.startTs,
-                value: b.sum
-            };
-        });
-}
-
-function getXmrGranularity() {
-    const el = document.getElementById('xmrGranularity');
-    return el ? el.value : 'daily';
-}
-
 function getXmrFilteredData() {
     const fromVal = document.getElementById('xmrDateFrom').value;
     const toVal = document.getElementById('xmrDateTo').value;
     const from = fromVal ? new Date(fromVal + 'T00:00:00').getTime() : null;
     const to = toVal ? new Date(toVal + 'T23:59:59').getTime() : null;
-
-    const granularity = getXmrGranularity();
-    const sourcePoints = granularity === 'weekly' ? aggregateXmrWeekly(xmrAllPoints) : xmrAllPoints;
-
-    return sourcePoints.filter(p => {
+    return xmrAllPoints.filter(p => {
         if (from !== null && p.timestamp < from) return false;
         if (to !== null && p.timestamp > to) return false;
         return true;
@@ -1559,8 +1508,7 @@ function detectZoneSignals(values, mean, zones, isOutOfLimits) {
     return signals;
 }
 
-function renderXChart(data, stats, rangeFrom, rangeTo, granularity) {
-    const unitLabel = granularity === 'weekly' ? 'elem./tydzień' : 'elem./dzień';
+function renderXChart(data, stats, rangeFrom, rangeTo) {
     const ctx = document.getElementById('xChart').getContext('2d');
     if (xChart) xChart.destroy();
 
@@ -1687,14 +1635,14 @@ function renderXChart(data, stats, rangeFrom, rangeTo, granularity) {
                             if (context.dataset.label.startsWith('CL') || context.dataset.label.startsWith('UCL') || context.dataset.label.startsWith('LCL')) {
                                 return context.dataset.label;
                             }
-                            return `${context.raw.dateLabel}: ${context.parsed.y} ${unitLabel}`;
+                            return `${context.raw.dateLabel}: ${context.parsed.y} elem./dzień`;
                         }
                     }
                 }
             },
             scales: {
                 y: {
-                    title: { display: true, text: `Wartość pomiaru (${unitLabel})`, font: { weight: 'bold' } },
+                    title: { display: true, text: 'Wartość pomiaru (elem./dzień)', font: { weight: 'bold' } },
                     beginAtZero: true,
                     grid: { color: '#eee' },
                     border: { color: '#999' }
@@ -1860,9 +1808,7 @@ function renderMrChart(stats, rangeFrom, rangeTo) {
     });
 }
 
-function updateXmrStability(data, stats, granularity) {
-    const periodNoun = granularity === 'weekly' ? 'tygodni' : 'dni';
-    const unitChangeNoun = granularity === 'weekly' ? 'tydzień-do-tygodnia' : 'dzień-do-dnia';
+function updateXmrStability(data, stats) {
     const values = data.map(p => p.value);
     const xSignals = detectZoneSignals(values, stats.mean, stats.zonesX, v => v > stats.uclX || v < stats.lclX);
     const xSignalCount = xSignals.filter(s => s.rule1 || s.rule2 || s.rule3 || s.rule4).length;
@@ -1871,10 +1817,10 @@ function updateXmrStability(data, stats, granularity) {
     const stabDetailEl = document.getElementById('xmrStabilityXDetail');
     if (xSignalCount === 0) {
         stabEl.innerHTML = '✅ <span class="trend-down">Proces stabilny</span>';
-        stabDetailEl.textContent = `Wszystkie ${data.length} ${periodNoun} mieszczą się w granicach kontrolnych i nie wykryto sygnałów reguł 1-4. Brak przyczyn specjalnych — tempo jest przewidywalne.`;
+        stabDetailEl.textContent = `Wszystkie ${data.length} dni mieszczą się w granicach kontrolnych i nie wykryto sygnałów reguł 1-4. Brak przyczyn specjalnych — tempo jest przewidywalne.`;
     } else {
-        stabEl.innerHTML = `⚠️ <span class="trend-up">${xSignalCount} ${periodNoun} z sygnałem (w tym ${outOfLimitsX.length} poza granicami)</span>`;
-        stabDetailEl.textContent = `Wykryto ${xSignalCount} ${periodNoun} z sygnałem reguł 1-4 (patrz lista sygnałów poniżej) — to przyczyny specjalne (np. dni wolne, awarie, nietypowe wrzutki, trwały przesunięcie poziomu procesu). Warto je zbadać indywidualnie.`;
+        stabEl.innerHTML = `⚠️ <span class="trend-up">${xSignalCount} dni z sygnałem (w tym ${outOfLimitsX.length} poza granicami)</span>`;
+        stabDetailEl.textContent = `Wykryto ${xSignalCount} dni z sygnałem reguł 1-4 (patrz lista sygnałów poniżej) — to przyczyny specjalne (np. dni wolne, awarie, nietypowe wrzutki, trwały przesunięcie poziomu procesu). Warto je zbadać indywidualnie.`;
     }
 
     const mrValues = stats.movingRanges.map(m => m.mr);
@@ -1885,16 +1831,15 @@ function updateXmrStability(data, stats, granularity) {
     const mrStabDetailEl = document.getElementById('xmrStabilityMrDetail');
     if (mrSignalCount === 0) {
         mrStabEl.innerHTML = '✅ <span class="trend-down">Zmienność pod kontrolą</span>';
-        mrStabDetailEl.textContent = `Żadna zmiana ${unitChangeNoun} nie wywołała sygnału reguł 1-4 — wahania tempa dostarczania mieszczą się w typowym zakresie.`;
+        mrStabDetailEl.textContent = `Żadna zmiana dzień-do-dnia nie wywołała sygnału reguł 1-4 — wahania tempa dostarczania mieszczą się w typowym zakresie.`;
     } else {
         mrStabEl.innerHTML = `⚠️ <span class="trend-up">${mrSignalCount} sygnałów (w tym ${outOfLimitsMr.length} powyżej UCL)</span>`;
-        mrStabDetailEl.textContent = `Wykryto ${mrSignalCount} sygnałów reguł 1-4 w zmienności ${unitChangeNoun} — oznacza to nagłe lub utrzymujące się zmiany tempa wymagające analizy przyczyny.`;
+        mrStabDetailEl.textContent = `Wykryto ${mrSignalCount} sygnałów reguł 1-4 w zmienności dzień-do-dnia — oznacza to nagłe lub utrzymujące się zmiany tempa wymagające analizy przyczyny.`;
     }
 }
 
-function updateXmrSignalsList(data, stats, granularity) {
+function updateXmrSignalsList(data, stats) {
     const container = document.getElementById('xmrSignalsContainer');
-    const unitLabel = granularity === 'weekly' ? 'elem./tydzień' : 'elem./dzień';
 
     const values = data.map(p => p.value);
     const xSignals = detectZoneSignals(values, stats.mean, stats.zonesX, v => v > stats.uclX || v < stats.lclX);
@@ -1912,16 +1857,16 @@ function updateXmrSignalsList(data, stats, granularity) {
     data.forEach((p, i) => {
         const s = xSignals[i];
         ['rule1', 'rule2', 'rule3', 'rule4'].forEach(r => {
-            if (s[r]) allSignals.push({ date: p.dateLabel, ts: p.timestamp, text: `Wykres X: ${p.value} ${unitLabel} — ${ruleLabel[r]}` });
+            if (s[r]) allSignals.push({ date: p.dateLabel, text: `Wykres X: ${p.value} elem./dzień — ${ruleLabel[r]}` });
         });
     });
     stats.movingRanges.forEach((m, i) => {
         const s = mrSignals[i];
         ['rule1', 'rule2', 'rule3', 'rule4'].forEach(r => {
-            if (s[r]) allSignals.push({ date: m.dateLabel, ts: m.ts, text: `Wykres MR: ${m.mr.toFixed(1)} — ${ruleLabel[r]}` });
+            if (s[r]) allSignals.push({ date: m.dateLabel, text: `Wykres MR: ${m.mr.toFixed(1)} — ${ruleLabel[r]}` });
         });
     });
-    allSignals.sort((a, b) => a.ts - b.ts);
+    allSignals.sort((a, b) => a.date.localeCompare(b.date));
 
     if (allSignals.length === 0) {
         container.innerHTML = '';
@@ -1965,16 +1910,14 @@ function renderXmr() {
     const rangeFrom = fromVal ? new Date(fromVal + 'T00:00:00').getTime() : null;
     const rangeTo = toVal ? new Date(toVal + 'T23:59:59').getTime() : null;
 
-    const granularity = getXmrGranularity();
-    renderXChart(data, stats, rangeFrom, rangeTo, granularity);
-    renderMrChart(stats, rangeFrom, rangeTo, granularity);
-    updateXmrStability(data, stats, granularity);
-    updateXmrSignalsList(data, stats, granularity);
+    renderXChart(data, stats, rangeFrom, rangeTo);
+    renderMrChart(stats, rangeFrom, rangeTo);
+    updateXmrStability(data, stats);
+    updateXmrSignalsList(data, stats);
 }
 
 document.getElementById('xmrDateFrom').addEventListener('change', renderXmr);
 document.getElementById('xmrDateTo').addEventListener('change', renderXmr);
-document.getElementById('xmrGranularity').addEventListener('change', renderXmr);
 
 window.addEventListener('load', initializeData);
 </script>
