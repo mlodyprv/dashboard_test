@@ -444,6 +444,13 @@
             Punkty poza granicami kontrolnymi (czerwone) sygnalizują przyczyny specjalne — sygnał, by zareagować i spróbować sterować procesem.
             Granice liczone są <b>standardowym, dwuetapowym algorytmem</b>: najpierw wyznaczane są wstępne X̄/MR̄ i granice na całym zbiorze, następnie punkty poza tymi wstępnymi granicami (wartości skrajne) są odrzucane, a X̄/MR̄ i ostateczne granice kontrolne liczone są ponownie na „czystych” danych — dzięki temu pojedyncza anomalia nie zawyża/zaniża granic dla reszty procesu.
         </div>
+        <div class="xmr-intro" style="margin-top:8px;">
+            <strong>🔎 Reguły wykrywania sygnałów (Western Electric / Nelson):</strong> zakres od średniej do granicy (0 lub UCL) dzielimy na 1/3 i 2/3 po obu stronach.
+            <span style="color:#c0392b; font-weight:bold;">🔴 Reguła 1</span> — pojedynczy punkt poza granicą kontrolną (UCL/LCL).
+            <span style="color:#e67e22; font-weight:bold;">🟠 Reguła 2</span> — 2 z 3 kolejnych punktów poza strefą 2/3 (po tej samej stronie średniej).
+            <span style="color:#b7950b; font-weight:bold;">🟡 Reguła 3</span> — 3 z 5 kolejnych punktów poza strefą 1/3 (po tej samej stronie).
+            <span style="color:#8e44ad; font-weight:bold;">🟣 Reguła 4</span> — 8 kolejnych punktów po jednej stronie średniej (trwałe przesunięcie poziomu procesu).
+        </div>
 
         <div class="stats-grid">
             <div class="stat-card"><div class="stat-label">Średnia (X̄)</div><div class="stat-value" id="xmrMean">0</div></div>
@@ -1420,10 +1427,85 @@ function computeXmrStats(data) {
     const uclMr = 3.267 * mrMean;
     const lclMr = 0;
 
+    // --- Strefy sygnałów (reguły Western Electric / Nelsona) ---
+    // Zakres od średniej do granicy dzielimy na 1/3 i 2/3 w obu kierunkach.
+    // Granica górna = UCL; granica dolna = 0 (lub LCL, jeśli LCL > 0) — tak jak
+    // wyświetlana, "obcięta" dolna granica na wykresie.
+    const zonesX = computeZoneBoundaries(mean, Math.max(0, lclX), uclX);
+    const zonesMr = computeZoneBoundaries(mrMean, 0, uclMr);
+
     return {
         mean, mrMean, uclX, lclX, uclMr, lclMr, movingRanges,
-        meanInitial, mrMeanInitial, uclXInitial, lclXInitial
+        meanInitial, mrMeanInitial, uclXInitial, lclXInitial,
+        zonesX, zonesMr
     };
+}
+
+// Dzieli odcinek [średnia -> granica] na 1/3 i 2/3 po obu stronach średniej.
+function computeZoneBoundaries(mean, lowerBoundary, upperBoundary) {
+    return {
+        lowerBoundary,
+        upperBoundary,
+        upperOneThird: mean + (upperBoundary - mean) / 3,
+        upperTwoThirds: mean + (upperBoundary - mean) * 2 / 3,
+        lowerOneThird: mean - (mean - lowerBoundary) / 3,
+        lowerTwoThirds: mean - (mean - lowerBoundary) * 2 / 3
+    };
+}
+
+// Wykrywanie sygnałów (reguły Western Electric / Nelsona) na sekwencji wartości:
+// - Reguła 1 (czerwony): pojedynczy punkt poza granicami kontrolnymi (UCL/LCL)
+// - Reguła 2 (pomarańczowy): 2 z 3 kolejnych punktów poza strefą 2/3 (licząc od średniej do granicy), po tej samej stronie
+// - Reguła 3 (żółty): 3 z 5 kolejnych punktów poza strefą 1/3, po tej samej stronie
+// - Reguła 4 (fioletowy): 8 kolejnych punktów po jednej stronie średniej
+function detectZoneSignals(values, mean, zones, isOutOfLimits) {
+    const n = values.length;
+    const signals = values.map(() => ({ rule1: false, rule2: false, rule3: false, rule4: false }));
+
+    for (let i = 0; i < n; i++) {
+        if (isOutOfLimits(values[i])) signals[i].rule1 = true;
+    }
+
+    // Reguła 2: w oknie 3 kolejnych punktów >=2 poza strefą 2/3 po tej samej stronie
+    for (let start = 0; start + 3 <= n; start++) {
+        const upperIdx = [], lowerIdx = [];
+        for (let k = 0; k < 3; k++) {
+            const idx = start + k;
+            const v = values[idx];
+            if (v >= zones.upperTwoThirds) upperIdx.push(idx);
+            else if (v <= zones.lowerTwoThirds) lowerIdx.push(idx);
+        }
+        if (upperIdx.length >= 2) upperIdx.forEach(idx => { signals[idx].rule2 = true; });
+        if (lowerIdx.length >= 2) lowerIdx.forEach(idx => { signals[idx].rule2 = true; });
+    }
+
+    // Reguła 3: w oknie 5 kolejnych punktów >=3 poza strefą 1/3 po tej samej stronie
+    for (let start = 0; start + 5 <= n; start++) {
+        const upperIdx = [], lowerIdx = [];
+        for (let k = 0; k < 5; k++) {
+            const idx = start + k;
+            const v = values[idx];
+            if (v >= zones.upperOneThird) upperIdx.push(idx);
+            else if (v <= zones.lowerOneThird) lowerIdx.push(idx);
+        }
+        if (upperIdx.length >= 3) upperIdx.forEach(idx => { signals[idx].rule3 = true; });
+        if (lowerIdx.length >= 3) lowerIdx.forEach(idx => { signals[idx].rule3 = true; });
+    }
+
+    // Reguła 4: 8 kolejnych punktów po jednej stronie średniej
+    for (let start = 0; start + 8 <= n; start++) {
+        let above = 0, below = 0;
+        for (let k = 0; k < 8; k++) {
+            const v = values[start + k];
+            if (v > mean) above++;
+            else if (v < mean) below++;
+        }
+        if (above === 8 || below === 8) {
+            for (let k = 0; k < 8; k++) signals[start + k].rule4 = true;
+        }
+    }
+
+    return signals;
 }
 
 function renderXChart(data, stats, rangeFrom, rangeTo) {
@@ -1435,6 +1517,12 @@ function renderXChart(data, stats, rangeFrom, rangeTo) {
     const lclDisplay = Math.max(0, stats.lclX);
     const minX = rangeFrom !== null && rangeFrom !== undefined ? rangeFrom : points[0].x;
     const maxX = rangeTo !== null && rangeTo !== undefined ? rangeTo : points[points.length - 1].x;
+
+    const values = data.map(p => p.value);
+    const xSignals = detectZoneSignals(values, stats.mean, stats.zonesX, v => v > stats.uclX || v < stats.lclX);
+    const rule2Points = points.filter((p, i) => xSignals[i].rule2 && !xSignals[i].rule1);
+    const rule3Points = points.filter((p, i) => xSignals[i].rule3 && !xSignals[i].rule1 && !xSignals[i].rule2);
+    const rule4Points = points.filter((p, i) => xSignals[i].rule4 && !xSignals[i].rule1 && !xSignals[i].rule2 && !xSignals[i].rule3);
 
     xChart = new Chart(ctx, {
         type: 'scatter',
@@ -1455,7 +1543,7 @@ function renderXChart(data, stats, rangeFrom, rangeTo) {
                     order: 2
                 },
                 {
-                    label: 'Wartość odstająca',
+                    label: 'Wartość odstająca (reguła 1: poza granicą)',
                     data: outliers,
                     showLine: false,
                     backgroundColor: '#c0392b',
@@ -1464,6 +1552,39 @@ function renderXChart(data, stats, rangeFrom, rangeTo) {
                     pointHoverRadius: 11,
                     pointStyle: 'circle',
                     order: 1
+                },
+                {
+                    label: 'Reguła 2: 2/3 poza strefą 2/3',
+                    data: rule2Points,
+                    showLine: false,
+                    backgroundColor: '#e67e22',
+                    borderColor: '#e67e22',
+                    pointRadius: 8,
+                    pointHoverRadius: 10,
+                    pointStyle: 'triangle',
+                    order: 2.1
+                },
+                {
+                    label: 'Reguła 3: 3/5 poza strefą 1/3',
+                    data: rule3Points,
+                    showLine: false,
+                    backgroundColor: '#f1c40f',
+                    borderColor: '#b7950b',
+                    pointRadius: 8,
+                    pointHoverRadius: 10,
+                    pointStyle: 'rectRot',
+                    order: 2.2
+                },
+                {
+                    label: 'Reguła 4: 8 punktów po jednej stronie',
+                    data: rule4Points,
+                    showLine: false,
+                    backgroundColor: '#8e44ad',
+                    borderColor: '#8e44ad',
+                    pointRadius: 7,
+                    pointHoverRadius: 9,
+                    pointStyle: 'rect',
+                    order: 2.3
                 },
                 {
                     label: `CL = ${stats.mean.toFixed(2)}`,
@@ -1552,6 +1673,13 @@ function renderMrChart(stats, rangeFrom, rangeTo) {
     const lastX = rangeTo !== null && rangeTo !== undefined ? rangeTo : mrData[mrData.length - 1].ts;
     const points = mrData.map(m => ({ x: m.ts, y: m.mr, dateLabel: m.dateLabel }));
 
+    const mrValues = mrData.map(m => m.mr);
+    const mrSignals = detectZoneSignals(mrValues, stats.mrMean, stats.zonesMr, v => v > stats.uclMr);
+    const outliersMr = points.filter((p, i) => mrSignals[i].rule1);
+    const rule2PointsMr = points.filter((p, i) => mrSignals[i].rule2 && !mrSignals[i].rule1);
+    const rule3PointsMr = points.filter((p, i) => mrSignals[i].rule3 && !mrSignals[i].rule1 && !mrSignals[i].rule2);
+    const rule4PointsMr = points.filter((p, i) => mrSignals[i].rule4 && !mrSignals[i].rule1 && !mrSignals[i].rule2 && !mrSignals[i].rule3);
+
     mrChart = new Chart(ctx, {
         type: 'scatter',
         data: {
@@ -1569,6 +1697,50 @@ function renderMrChart(stats, rangeFrom, rangeTo) {
                     pointHoverRadius: 8,
                     tension: 0,
                     order: 2
+                },
+                {
+                    label: 'Wartość odstająca (reguła 1: poza granicą)',
+                    data: outliersMr,
+                    showLine: false,
+                    backgroundColor: '#c0392b',
+                    borderColor: '#c0392b',
+                    pointRadius: 9,
+                    pointHoverRadius: 11,
+                    pointStyle: 'circle',
+                    order: 1
+                },
+                {
+                    label: 'Reguła 2: 2/3 poza strefą 2/3',
+                    data: rule2PointsMr,
+                    showLine: false,
+                    backgroundColor: '#e67e22',
+                    borderColor: '#e67e22',
+                    pointRadius: 8,
+                    pointHoverRadius: 10,
+                    pointStyle: 'triangle',
+                    order: 2.1
+                },
+                {
+                    label: 'Reguła 3: 3/5 poza strefą 1/3',
+                    data: rule3PointsMr,
+                    showLine: false,
+                    backgroundColor: '#f1c40f',
+                    borderColor: '#b7950b',
+                    pointRadius: 8,
+                    pointHoverRadius: 10,
+                    pointStyle: 'rectRot',
+                    order: 2.2
+                },
+                {
+                    label: 'Reguła 4: 8 punktów po jednej stronie',
+                    data: rule4PointsMr,
+                    showLine: false,
+                    backgroundColor: '#8e44ad',
+                    borderColor: '#8e44ad',
+                    pointRadius: 7,
+                    pointHoverRadius: 9,
+                    pointStyle: 'rect',
+                    order: 2.3
                 },
                 {
                     label: `CL = ${stats.mrMean.toFixed(2)}`,
@@ -1637,36 +1809,64 @@ function renderMrChart(stats, rangeFrom, rangeTo) {
 }
 
 function updateXmrStability(data, stats) {
+    const values = data.map(p => p.value);
+    const xSignals = detectZoneSignals(values, stats.mean, stats.zonesX, v => v > stats.uclX || v < stats.lclX);
+    const xSignalCount = xSignals.filter(s => s.rule1 || s.rule2 || s.rule3 || s.rule4).length;
     const outOfLimitsX = data.filter(p => p.value > stats.uclX || p.value < stats.lclX);
     const stabEl = document.getElementById('xmrStabilityX');
     const stabDetailEl = document.getElementById('xmrStabilityXDetail');
-    if (outOfLimitsX.length === 0) {
+    if (xSignalCount === 0) {
         stabEl.innerHTML = '✅ <span class="trend-down">Proces stabilny</span>';
-        stabDetailEl.textContent = `Wszystkie ${data.length} dni mieszczą się w granicach kontrolnych (X̄ ± 2,66·MR̄). Brak przyczyn specjalnych — tempo jest przewidywalne.`;
+        stabDetailEl.textContent = `Wszystkie ${data.length} dni mieszczą się w granicach kontrolnych i nie wykryto sygnałów reguł 1-4. Brak przyczyn specjalnych — tempo jest przewidywalne.`;
     } else {
-        stabEl.innerHTML = `⚠️ <span class="trend-up">${outOfLimitsX.length} dni poza granicami</span>`;
-        stabDetailEl.textContent = `Wykryto ${outOfLimitsX.length} dni z wartością poza granicami kontrolnymi — to przyczyny specjalne (np. dni wolne, awarie, nietypowe wrzutki). Warto je zbadać indywidualnie.`;
+        stabEl.innerHTML = `⚠️ <span class="trend-up">${xSignalCount} dni z sygnałem (w tym ${outOfLimitsX.length} poza granicami)</span>`;
+        stabDetailEl.textContent = `Wykryto ${xSignalCount} dni z sygnałem reguł 1-4 (patrz lista sygnałów poniżej) — to przyczyny specjalne (np. dni wolne, awarie, nietypowe wrzutki, trwały przesunięcie poziomu procesu). Warto je zbadać indywidualnie.`;
     }
 
+    const mrValues = stats.movingRanges.map(m => m.mr);
+    const mrSignals = detectZoneSignals(mrValues, stats.mrMean, stats.zonesMr, v => v > stats.uclMr);
+    const mrSignalCount = mrSignals.filter(s => s.rule1 || s.rule2 || s.rule3 || s.rule4).length;
     const outOfLimitsMr = stats.movingRanges.filter(m => m.mr > stats.uclMr);
     const mrStabEl = document.getElementById('xmrStabilityMr');
     const mrStabDetailEl = document.getElementById('xmrStabilityMrDetail');
-    if (outOfLimitsMr.length === 0) {
+    if (mrSignalCount === 0) {
         mrStabEl.innerHTML = '✅ <span class="trend-down">Zmienność pod kontrolą</span>';
-        mrStabDetailEl.textContent = `Żadna zmiana dzień-do-dnia nie przekracza granicy 3,27·MR̄ — wahania tempa dostarczania mieszczą się w typowym zakresie.`;
+        mrStabDetailEl.textContent = `Żadna zmiana dzień-do-dnia nie wywołała sygnału reguł 1-4 — wahania tempa dostarczania mieszczą się w typowym zakresie.`;
     } else {
-        mrStabEl.innerHTML = `⚠️ <span class="trend-up">${outOfLimitsMr.length} skoków powyżej UCL</span>`;
-        mrStabDetailEl.textContent = `${outOfLimitsMr.length} razy zmiana względem poprzedniego dnia przekroczyła granicę 3,27·MR̄ — oznacza to nagłe, nietypowe skoki tempa wymagające analizy przyczyny.`;
+        mrStabEl.innerHTML = `⚠️ <span class="trend-up">${mrSignalCount} sygnałów (w tym ${outOfLimitsMr.length} powyżej UCL)</span>`;
+        mrStabDetailEl.textContent = `Wykryto ${mrSignalCount} sygnałów reguł 1-4 w zmienności dzień-do-dnia — oznacza to nagłe lub utrzymujące się zmiany tempa wymagające analizy przyczyny.`;
     }
 }
 
 function updateXmrSignalsList(data, stats) {
     const container = document.getElementById('xmrSignalsContainer');
-    const signalsX = data.filter(p => p.value > stats.uclX || p.value < stats.lclX)
-        .map(p => ({ date: p.dateLabel, text: `X = ${p.value} (${p.value > stats.uclX ? 'powyżej UCL' : 'poniżej LCL'})` }));
-    const signalsMr = stats.movingRanges.filter(m => m.mr > stats.uclMr)
-        .map(m => ({ date: m.dateLabel, text: `MR = ${m.mr.toFixed(1)} (powyżej UCL)` }));
-    const allSignals = signalsX.concat(signalsMr).sort((a, b) => a.date.localeCompare(b.date));
+
+    const values = data.map(p => p.value);
+    const xSignals = detectZoneSignals(values, stats.mean, stats.zonesX, v => v > stats.uclX || v < stats.lclX);
+    const mrValues = stats.movingRanges.map(m => m.mr);
+    const mrSignals = detectZoneSignals(mrValues, stats.mrMean, stats.zonesMr, v => v > stats.uclMr);
+
+    const ruleLabel = {
+        rule1: '🔴 Reguła 1: punkt poza granicą kontrolną',
+        rule2: '🟠 Reguła 2: 2 z 3 kolejnych poza strefą 2/3',
+        rule3: '🟡 Reguła 3: 3 z 5 kolejnych poza strefą 1/3',
+        rule4: '🟣 Reguła 4: 8 kolejnych punktów po jednej stronie średniej'
+    };
+
+    const allSignals = [];
+    data.forEach((p, i) => {
+        const s = xSignals[i];
+        ['rule1', 'rule2', 'rule3', 'rule4'].forEach(r => {
+            if (s[r]) allSignals.push({ date: p.dateLabel, text: `Wykres X: ${p.value} elem./dzień — ${ruleLabel[r]}` });
+        });
+    });
+    stats.movingRanges.forEach((m, i) => {
+        const s = mrSignals[i];
+        ['rule1', 'rule2', 'rule3', 'rule4'].forEach(r => {
+            if (s[r]) allSignals.push({ date: m.dateLabel, text: `Wykres MR: ${m.mr.toFixed(1)} — ${ruleLabel[r]}` });
+        });
+    });
+    allSignals.sort((a, b) => a.date.localeCompare(b.date));
 
     if (allSignals.length === 0) {
         container.innerHTML = '';
